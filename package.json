@@ -1,0 +1,37 @@
+{
+  "name": "imprimerie-saas",
+  "version": "1.0.0",
+  "description": "Le logiciel de gestion d'imprimerie de LGI-consulting",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LGI-Consulting/Imprimerie-SaaS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LGI-Consulting/Imprimerie-SaaS/issues"
+  },
+  "homepage": "https://github.com/LGI-Consulting/Imprimerie-SaaS#readme",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.2",
+    "pg": "^8.14.1",
+    "pg-pool": "^3.8.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.24.0",
+    "nodemon": "^3.1.9"
+  }
+}
