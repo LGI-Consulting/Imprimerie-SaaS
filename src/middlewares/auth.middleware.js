@@ -1,31 +1,31 @@
-import * as jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 
 dotenv.config();
 /**
  * Middleware pour vérifier le token JWT et authentifier l'utilisateur
  */
 const verifyToken = (req, res, next) => {
-  const token = req.headers['x-access-token'] || req.headers['authorization'];
-  
+  const token = req.headers["x-access-token"] || req.headers["authorization"];
+
   if (!token) {
     return res.status(403).json({
       success: false,
-      message: 'Un token est requis pour l\'authentification'
+      message: "Un token est requis pour l'authentification",
     });
   }
 
   try {
     // Enlever le préfixe 'Bearer ' si présent
-    const tokenValue = token.startsWith('Bearer ') ? token.slice(7) : token;
-    
+    const tokenValue = token.startsWith("Bearer ") ? token.slice(7) : token;
+
     const decoded = jwt.verify(tokenValue, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({
       success: false,
-      message: 'Token invalide ou expiré'
+      message: "Token invalide ou expiré",
     });
   }
 };
@@ -38,7 +38,7 @@ const checkRole = (roles) => {
     if (!req.user) {
       return res.status(403).json({
         success: false,
-        message: 'Utilisateur non authentifié'
+        message: "Utilisateur non authentifié",
       });
     }
 
@@ -47,7 +47,8 @@ const checkRole = (roles) => {
     } else {
       res.status(403).json({
         success: false,
-        message: 'Vous n\'avez pas les droits suffisants pour accéder à cette ressource'
+        message:
+          "Vous n'avez pas les droits suffisants pour accéder à cette ressource",
       });
     }
   };
@@ -55,5 +56,5 @@ const checkRole = (roles) => {
 
 export default {
   verifyToken,
-  checkRole
+  checkRole,
 };
