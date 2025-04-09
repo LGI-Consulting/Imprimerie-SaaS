@@ -204,7 +204,7 @@ dotenv.config();
  */
  async function getProfile(req, res) {
   try {
-    const result = await query('SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes WHERE employe_id = $1', [req.user.id]);
+    const result = await pool.query('SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes WHERE employe_id = $1', [req.user.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
