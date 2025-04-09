@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+  imprim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: imprim-app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db  # Override DB_HOST from localhost to service name
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - db
+    command: npm start
+
+  db:
+    image: postgres:15.12
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: geeko@admin
+      POSTGRES_DB: imprimerie_db_docker
+    ports:
+      - "5433:543"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
