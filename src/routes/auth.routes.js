@@ -1,20 +1,38 @@
 import express from 'express';
-const router = express.Router();
+import rateLimit from 'express-rate-limit';
 import * as authController from '../controllers/auth.controller.js';
-import { verifyToken, checkRole, checkSuperAdmin, checkTenantAdmin } from '../middlewares/auth.middleware.js';
+import { verifyToken, checksadmin, checkTenantAdmin } from '../middlewares/auth.middleware.js';
 
-// Routes pour les employés des tenants
+const router = express.Router();
+
+// 💥 Anti brute-force : limiter les tentatives de connexion
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 tentatives
+  message: {
+    success: false,
+    message: "Trop de tentatives de connexion, veuillez réessayer plus tard.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Routes employés des tenants
 router.post('/register', verifyToken, checkTenantAdmin, authController.register);
-router.post('/login', authController.login);
+router.post('/login', loginLimiter, authController.login);
 router.post('/logout', verifyToken, authController.logout);
 router.get('/profile', verifyToken, authController.getProfile);
 
-// Routes pour les opérations Super Admin
-router.post('/super-admin/login', authController.superAdminLogin);
-router.post('/super-admin/create', authController.createSuperAdmin);
+// Super Admin
+router.post('/super-admin/login', loginLimiter, authController.sadminLogin);
+// Added middleware for authentication on super admin creation
+router.post('/super-admin/create', verifyToken, checksadmin, authController.createsadmin);
 
-// Routes pour la gestion des tenants (réservées aux super admins)
-router.post('/tenant/register', verifyToken, checkSuperAdmin, authController.registerTenant);
-router.post('/tenant/admin/register', verifyToken, checkSuperAdmin, authController.registerTenantAdmin);
+// Tenant
+router.post('/tenant/register', verifyToken, checksadmin, authController.registerTenant);
+router.post('/tenant/admin/register', verifyToken, checksadmin, authController.registerTenantAdmin);
+
+// 🔄 Refresh token route
+router.post('/token/refresh', authController.refreshToken);
 
 export default router;

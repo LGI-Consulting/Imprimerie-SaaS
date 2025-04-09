@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import cookieParser from 'cookie-parser';
+
 
 dotenv.config();
 
@@ -24,6 +26,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Middlewares
+app.use(cookieParser());
 app.use(helmet()); // Sécurité
 app.use(cors());   // Gestion des CORS
 app.use(express.json()); // Parsing du JSON

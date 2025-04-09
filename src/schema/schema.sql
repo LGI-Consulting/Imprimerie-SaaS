@@ -12,7 +12,7 @@ CREATE TABLE tenants (
 );
 
 -- Table des super admin système
-CREATE TABLE super_admin (
+CREATE TABLE sadmin (
     admin_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,  
     password VARCHAR(255) NOT NULL,      
@@ -32,7 +32,7 @@ CREATE TABLE employes (
     email VARCHAR(100) NOT NULL,
     telephone VARCHAR(20) NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'accueil', 'caisse', 'graphiste')),
-    mot_de_passe VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     date_embauche DATE NOT NULL,
     est_actif BOOLEAN DEFAULT TRUE,
     UNIQUE (email, tenant_id)  -- Permet d'avoir le même email dans différents tenants
@@ -190,7 +190,7 @@ CREATE TABLE sessions_utilisateurs (
     session_id SERIAL PRIMARY KEY,
     tenant_id INTEGER REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     employe_id INTEGER REFERENCES employes(employe_id),
-    super_admin_id INTEGER REFERENCES super_admin(admin_id),
+    sadmin_id INTEGER REFERENCES sadmin(admin_id),
     token_jwt TEXT NOT NULL,
     date_connexion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_expiration TIMESTAMP NOT NULL,
@@ -203,7 +203,7 @@ CREATE TABLE journal_activites (
     log_id SERIAL PRIMARY KEY,
     tenant_id INTEGER REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     employe_id INTEGER REFERENCES employes(employe_id),
-    super_admin_id INTEGER REFERENCES super_admin(admin_id),
+    sadmin_id INTEGER REFERENCES sadmin(admin_id),
     action VARCHAR(100) NOT NULL,
     date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     details TEXT,
