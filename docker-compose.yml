@@ -1,33 +1,42 @@
-version: "3.9"
+version: '3.9'
 
 services:
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-    depends_on:
-      - db
-      
-  imprim:
+  # Backend API service
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: imprim-app
+    container_name: imprim-backend
     ports:
       - "5000:5000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
-      DB_HOST: db # Override DB_HOST from localhost to service name
+      DB_HOST: db  # Override DB_HOST from localhost to service name
+      NODE_ENV: development
     volumes:
-      - .:/app
-      - /app/node_modules
+      - ./backend:/src
+      - /src/node_modules
     depends_on:
       - db
-    command: npm start
+    command: npm run dev  # Using a development command with hot-reload
 
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: imprim-frontend
+    ports:
+      - "3000:3000"  # Typical port for React development server
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm start  # Or whatever your frontend dev server start command is
+
+  # Database service
   db:
     image: postgres:15.12
     container_name: postgres-db
@@ -37,9 +46,19 @@ services:
       POSTGRES_PASSWORD: geeko@admin
       POSTGRES_DB: imprimerie_db_docker
     ports:
-      - "5433:5433"
+      - "5433:5432"  # Maps container's 5432 to host's 5433
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  # Database administration tool
+  adminer:
+    image: adminer
+    container_name: imprim-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
 
 volumes:
   pgdata:
