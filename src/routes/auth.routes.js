@@ -1,18 +1,20 @@
 import express from 'express';
 const router = express.Router();
-import authController from '../controllers/auth.controller.js';
-import  authMid from '../middlewares/auth.middleware.js';
+import * as authController from '../controllers/auth.controller.js';
+import { verifyToken, checkRole, checkSuperAdmin, checkTenantAdmin } from '../middlewares/auth.middleware.js';
 
-// Route d'enregistrement (accessible uniquement aux administrateurs)
-router.post('/register', authMid.verifyToken, authMid.checkRole(['admin']), authController.register);
-
-// Route de connexion (accessible à tous)
+// Routes pour les employés des tenants
+router.post('/register', verifyToken, checkTenantAdmin, authController.register);
 router.post('/login', authController.login);
+router.post('/logout', verifyToken, authController.logout);
+router.get('/profile', verifyToken, authController.getProfile);
 
-// Route de déconnexion (accessible aux utilisateurs connectés)
-router.post('/logout', authMid.verifyToken, authController.logout);
+// Routes pour les opérations Super Admin
+router.post('/super-admin/login', authController.superAdminLogin);
+router.post('/super-admin/create', authController.createSuperAdmin);
 
-// Route pour obtenir le profil (accessible aux utilisateurs connectés)
-router.get('/profile', authMid.verifyToken, authController.getProfile);
+// Routes pour la gestion des tenants (réservées aux super admins)
+router.post('/tenant/register', verifyToken, checkSuperAdmin, authController.registerTenant);
+router.post('/tenant/admin/register', verifyToken, checkSuperAdmin, authController.registerTenantAdmin);
 
-export default router
+export default router;
