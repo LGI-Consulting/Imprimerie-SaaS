@@ -1,6 +1,15 @@
-version: '3.9'
+version: "3.9"
 
 services:
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+      
   imprim:
     build:
       context: .
@@ -11,7 +20,7 @@ services:
     env_file:
       - .env
     environment:
-      DB_HOST: db  # Override DB_HOST from localhost to service name
+      DB_HOST: db # Override DB_HOST from localhost to service name
     volumes:
       - .:/app
       - /app/node_modules
@@ -28,7 +37,7 @@ services:
       POSTGRES_PASSWORD: geeko@admin
       POSTGRES_DB: imprimerie_db_docker
     ports:
-      - "5433:543"
+      - "5433:5433"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
