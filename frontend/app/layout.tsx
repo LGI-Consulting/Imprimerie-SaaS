@@ -8,9 +8,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Multi-Tenant SaaS Dashboard",
-  description: "A multi-tenant SaaS admin dashboard with authentication",
-    generator: 'v0.dev'
+  title: "Print Shop Lotus",
+  description: "Un systeme de gestion pour les ateliers d'impression",
 }
 
 export default function RootLayout({
@@ -20,6 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+      <link rel="icon" href="/LGI-logo.ico" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>

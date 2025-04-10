@@ -1,3 +1,4 @@
+// tailwind.config.ts
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -7,9 +8,23 @@ const config: Config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "*.{js,ts,jsx,tsx,mdx}",
+    "./src/**/*.{js,ts,jsx,tsx,mdx}", // Added src directory for more comprehensive coverage
   ],
   theme: {
+    container: {
+      center: true, // This centers all containers by default
+      padding: {
+        DEFAULT: '1rem',
+        sm: '2rem',
+        lg: '4rem',
+        xl: '5rem',
+        '2xl': '6rem',
+      },
+    },
     extend: {
+      fontFamily: {
+        sans: ['Arial', 'Helvetica', 'sans-serif'], // Match your global body font
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -52,7 +67,7 @@ const config: Config = {
           "5": "hsl(var(--chart-5))",
         },
         sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background))",
+          DEFAULT: "hsl(var(--sidebar-background))", // Changed from --sidebar to --sidebar-background to match CSS var
           foreground: "hsl(var(--sidebar-foreground))",
           primary: "hsl(var(--sidebar-primary))",
           "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
@@ -62,12 +77,17 @@ const config: Config = {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
-      borderColor: ({theme}) => ({
-        ...theme("colors"),
-        border: "hsl(var(--border))",
-      }),
+      borderColor: {
+        DEFAULT: "hsl(var(--border))",
+      },
       ringColor: {
-        border: "hsl(var(--border))",
+        DEFAULT: "hsl(var(--ring))",
+      },
+      textColor: {
+        DEFAULT: "hsl(var(--foreground))",
+      },
+      backgroundColor: {
+        DEFAULT: "hsl(var(--background))",
       },
       borderRadius: {
         lg: "var(--radius)",
