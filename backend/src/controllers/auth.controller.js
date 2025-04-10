@@ -374,7 +374,7 @@ async function refreshToken(req, res) {
  */
 async function sadminLogin(req, res) {
   try {
-    const { email, passwordword } = req.body;
+    const { email, password } = req.body;
 
     // Vérifier si le super admin existe
     const result = await pool.query(
@@ -399,7 +399,7 @@ async function sadminLogin(req, res) {
     }
 
     // Vérifier le mot de passworde
-    const ispasswordValid = await bc.compare(passwordword, admin.passwordword);
+    const ispasswordValid = await bc.compare(password, admin.password);
     if (!ispasswordValid) {
       return res.status(401).json({
         success: false,
