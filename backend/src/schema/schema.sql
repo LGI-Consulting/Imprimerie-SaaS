@@ -35,7 +35,7 @@ CREATE TABLE employes (
     password VARCHAR(255) NOT NULL,
     date_embauche DATE NOT NULL,
     est_actif BOOLEAN DEFAULT TRUE,
-    UNIQUE (email, tenant_id)  -- Permet d'avoir le même email dans différents tenants
+    UNIQUE (email, tenant_id)
 );
 
 -- Table Clients
@@ -55,14 +55,27 @@ CREATE TABLE clients (
 CREATE TABLE materiaux (
     materiau_id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    nom VARCHAR(100) NOT NULL,
+    type_materiau VARCHAR(100) NOT NULL,
+    nom VARCHAR(100),
     description TEXT,
     prix_unitaire DECIMAL(10, 2) NOT NULL,
     unite_mesure VARCHAR(20) NOT NULL,
-    quantite_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    seuil_alerte DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    options_disponibles JSONB DEFAULT '{}',
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+--  Table Stocks par largeur (nouvelle)
+CREATE TABLE stocks_materiaux_largeur (
+    stock_id SERIAL PRIMARY KEY,
+    materiau_id INTEGER NOT NULL REFERENCES materiaux(materiau_id) ON DELETE CASCADE,
+    largeur DECIMAL(10, 2) NOT NULL,
+    quantite_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    seuil_alerte DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    unite_mesure VARCHAR(20) NOT NULL,
+    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (materiau_id, largeur)
 );
 
 -- Table Travaux d'Impression
@@ -81,6 +94,7 @@ CREATE TABLE commandes (
     tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     client_id INTEGER REFERENCES clients(client_id),
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    numero_commande VARCHAR(50) UNIQUE,
     statut VARCHAR(20) NOT NULL CHECK (statut IN ('reçue', 'payée', 'en_impression', 'terminée', 'livrée')),
     priorite INTEGER DEFAULT 0,
     commentaires TEXT,
@@ -101,21 +115,6 @@ CREATE TABLE details_commande (
     prix_unitaire DECIMAL(10, 2) NOT NULL,
     sous_total DECIMAL(10, 2) NOT NULL,
     commentaires TEXT
-);
-
--- Table Fichiers
-CREATE TABLE fichiers (
-    fichier_id SERIAL PRIMARY KEY,
-    detail_id INTEGER REFERENCES details_commande(detail_id) ON DELETE CASCADE,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    nom_fichier VARCHAR(255) NOT NULL,
-    chemin_stockage VARCHAR(255) NOT NULL,
-    type_fichier VARCHAR(50),
-    taille BIGINT,
-    date_upload TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    dimensions VARCHAR(100),
-    resolution VARCHAR(50),
-    statut_verification VARCHAR(20) DEFAULT 'en_attente'
 );
 
 -- Table Paiements
@@ -144,14 +143,14 @@ CREATE TABLE factures (
     montant_final DECIMAL(10, 2) NOT NULL,
     chemin_pdf VARCHAR(255),
     date_paiement TIMESTAMP,
-    UNIQUE (numero_facture, tenant_id)  -- Permet d'avoir le même numéro dans différents tenants
+    UNIQUE (numero_facture, tenant_id)
 );
 
--- Table Mouvements de Stock
+-- Table Mouvements de Stock mise à jour
 CREATE TABLE mouvements_stock (
     mouvement_id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    materiau_id INTEGER REFERENCES materiaux(materiau_id),
+    stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),  -- Changement ici
     type_mouvement VARCHAR(20) NOT NULL CHECK (type_mouvement IN ('entrée', 'sortie', 'ajustement')),
     quantite DECIMAL(10, 2) NOT NULL,
     date_mouvement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -174,16 +173,6 @@ CREATE TABLE remises (
     est_active BOOLEAN DEFAULT TRUE
 );
 
--- Table Notifications
-CREATE TABLE notifications (
-    notification_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL,
-    message TEXT NOT NULL,
-    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    est_lue BOOLEAN DEFAULT FALSE,
-    destinataire_id INTEGER REFERENCES employes(employe_id)
-);
 
 -- Table Sessions Utilisateurs
 CREATE TABLE sessions_utilisateurs (

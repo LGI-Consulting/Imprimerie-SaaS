@@ -1,6 +1,5 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import cookieParser from "cookie-parser"; // à utiliser dans l'app principale
 import fs from "fs";
 
 dotenv.config();

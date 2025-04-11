@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
 
@@ -14,16 +13,19 @@ import pool from './config/db.js';
 
 // Importation des routes
 import authRoutes from './routes/auth.routes.js';
+import clientRoutes from './routes/client.routes.js';
+import commandeRoutes from './routes/commande.routes.js';
+import materiauRoutes from './routes/materiau.routes.js';
+import paiementRoutes from './routes/paiement.routes.js';
+import remiseRoutes from './routes/remise.routes.js';
+import { swaggerUi, specs } from './config/swagger.js';
+
 /**
-const clientRoutes = require('./routes/client.routes');
-const commandeRoutes = require('./routes/commande.routes');
 const materiauRoutes = require('./routes/materiau.routes');
 const paiementRoutes = require('./routes/paiement.routes');
 */
 const app = express();
 const PORT = process.env.PORT;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Middlewares
 app.use(cookieParser());
@@ -32,22 +34,18 @@ app.use(cors());   // Gestion des CORS
 app.use(express.json()); // Parsing du JSON
 app.use(express.urlencoded({ extended: true })); // Parsing des URL encodées
 
-// Dossier statique pour les uploads
-app.use('/uploads', express.static(join(__dirname, 'uploads')));
-
 // Routes
 app.use('/api/auth', authRoutes);
-/**
 app.use('/api/clients', clientRoutes);
 app.use('/api/commandes', commandeRoutes);
 app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
+app.use('/api/remise', remiseRoutes);
+/**
 */
 
 // Route de base
-app.get('/', (req, res) => {
-  res.json({ message: 'Bienvenue sur l\'API de gestion des commandes d\'impression' });
-});
+app.use('/', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Middleware de gestion d'erreurs
 app.use((err, req, res, next) => {

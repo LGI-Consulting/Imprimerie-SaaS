@@ -218,7 +218,7 @@ function generateTokens(user) {
   });
 
   const refreshToken = jwt.sign(user, process.env.JWT_SECRET_REFRESH, {
-    expiresIn: "7d",
+    expiresIn: "1d",
   });
 
   return { accessToken, refreshToken };
