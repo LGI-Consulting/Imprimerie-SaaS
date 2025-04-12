@@ -20,15 +20,13 @@ const router = express.Router();
 router.use(verifyToken);
 router.use(checkTenantAccess);
 
-// Routes clients avec vérification des rôles appropriés
-// Supposons que 'user', 'manager' et 'admin' peuvent voir les clients
+// Routes de consultation des matériaux
 router.get("/", checkRole(["accueil", "admin", "graphiste"]), getAllMateriau);
 router.get("/search", checkRole(["accueil", "admin", "graphiste"]), getMateriauBySearch);
-router.get("/:id", checkRole(["accueil", "admin", "graphiste"]), getMateriauByID)
-router.get("/:stock", checkRole(["accueil", "admin", "graphiste"]), getMateriauStock)
+router.get("/stock/low", checkRole(["accueil", "admin", "graphiste"]), getMateriauStock);
+router.get("/:id", checkRole(["accueil", "admin", "graphiste"]), getMateriauByID);
 
-
-// Opérations de création/modification réservées aux managers et admins
+// Opérations de création/modification
 router.post("/", checkRole(["accueil", "admin", "graphiste"]), createMateriau);
 router.put("/:id", checkRole(["accueil", "admin", "graphiste"]), updateMateriau);
 

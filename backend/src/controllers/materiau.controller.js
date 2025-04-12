@@ -1,29 +1,26 @@
 import pool from "../config/db.js";
-import { v4 as uuidv4 } from "uuid";
 
 /**
  * Get all materials for a specific tenant
  */
 export const getAllMateriau = async (req, res) => {
   try {
-    const tenantId = req.tenantId;
+    const tenantId = req.user.tenant_id;
     
     const query = `
       SELECT m.*, 
-             COALESCE(json_agg(
-               json_build_object(
-                 'stock_id', s.stock_id,
-                 'largeur', s.largeur,
-                 'quantite_en_stock', s.quantite_en_stock,
-                 'seuil_alerte', s.seuil_alerte,
-                 'unite_mesure', s.unite_mesure
-               )
-             ) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
+        COALESCE(json_agg(json_build_object(
+          'stock_id', s.stock_id,
+          'largeur', s.largeur,
+          'quantite_en_stock', s.quantite_en_stock,
+          'unite_mesure', s.unite_mesure,
+          'seuil_alerte', s.seuil_alerte
+        )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
       WHERE m.tenant_id = $1
       GROUP BY m.materiau_id
-      ORDER BY m.date_creation DESC
+      ORDER BY m.type_materiau, m.nom
     `;
     
     const result = await pool.query(query, [tenantId]);
@@ -34,7 +31,7 @@ export const getAllMateriau = async (req, res) => {
       data: result.rows
     });
   } catch (error) {
-    console.error("Error getting all materiaux:", error);
+    console.error("Error getting materials:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la récupération des matériaux",
@@ -44,31 +41,82 @@ export const getAllMateriau = async (req, res) => {
 };
 
 /**
- * Get material by ID
+ * Search materials by type, name, or description
  */
-export const getMateriauByID = async (req, res) => {
+export const getMateriauBySearch = async (req, res) => {
   try {
-    const tenantId = req.tenantId;
-    const materiauId = req.params.id;
+    const tenantId = req.user.tenant_id;
+    const { term } = req.query;
+    
+    if (!term) {
+      return res.status(400).json({
+        success: false,
+        message: "Un terme de recherche est requis"
+      });
+    }
+    
+    const searchTerm = `%${term}%`;
     
     const query = `
       SELECT m.*, 
-             COALESCE(json_agg(
-               json_build_object(
-                 'stock_id', s.stock_id,
-                 'largeur', s.largeur,
-                 'quantite_en_stock', s.quantite_en_stock,
-                 'seuil_alerte', s.seuil_alerte,
-                 'unite_mesure', s.unite_mesure
-               )
-             ) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
+        COALESCE(json_agg(json_build_object(
+          'stock_id', s.stock_id,
+          'largeur', s.largeur,
+          'quantite_en_stock', s.quantite_en_stock,
+          'unite_mesure', s.unite_mesure,
+          'seuil_alerte', s.seuil_alerte
+        )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
+      FROM materiaux m
+      LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
+      WHERE m.tenant_id = $1 AND 
+            (m.type_materiau ILIKE $2 OR 
+             m.nom ILIKE $2 OR 
+             m.description ILIKE $2)
+      GROUP BY m.materiau_id
+      ORDER BY m.type_materiau, m.nom
+    `;
+    
+    const result = await pool.query(query, [tenantId, searchTerm]);
+    
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error("Error searching materials:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la recherche des matériaux",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get a specific material by ID with its stock information
+ */
+export const getMateriauByID = async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const { id } = req.params;
+    
+    const query = `
+      SELECT m.*, 
+        COALESCE(json_agg(json_build_object(
+          'stock_id', s.stock_id,
+          'largeur', s.largeur,
+          'quantite_en_stock', s.quantite_en_stock,
+          'unite_mesure', s.unite_mesure,
+          'seuil_alerte', s.seuil_alerte
+        )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
       WHERE m.tenant_id = $1 AND m.materiau_id = $2
       GROUP BY m.materiau_id
     `;
     
-    const result = await pool.query(query, [tenantId, materiauId]);
+    const result = await pool.query(query, [tenantId, id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -82,7 +130,7 @@ export const getMateriauByID = async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
-    console.error("Error getting materiau by ID:", error);
+    console.error("Error getting material by ID:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la récupération du matériau",
@@ -92,79 +140,30 @@ export const getMateriauByID = async (req, res) => {
 };
 
 /**
- * Search materials by name, type or description
- */
-export const getMateriauBySearch = async (req, res) => {
-  try {
-    const tenantId = req.tenantId;
-    const { term } = req.query;
-    
-    if (!term) {
-      return res.status(400).json({
-        success: false,
-        message: "Le terme de recherche est requis"
-      });
-    }
-    
-    const searchTerm = `%${term}%`;
-    
-    const query = `
-      SELECT m.*, 
-             COALESCE(json_agg(
-               json_build_object(
-                 'stock_id', s.stock_id,
-                 'largeur', s.largeur,
-                 'quantite_en_stock', s.quantite_en_stock,
-                 'seuil_alerte', s.seuil_alerte,
-                 'unite_mesure', s.unite_mesure
-               )
-             ) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
-      FROM materiaux m
-      LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 
-      AND (
-        m.nom ILIKE $2 OR
-        m.type_materiau ILIKE $2 OR
-        m.description ILIKE $2
-      )
-      GROUP BY m.materiau_id
-      ORDER BY m.date_creation DESC
-    `;
-    
-    const result = await pool.query(query, [tenantId, searchTerm]);
-    
-    res.status(200).json({
-      success: true,
-      count: result.rows.length,
-      data: result.rows
-    });
-  } catch (error) {
-    console.error("Error searching materiaux:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de la recherche des matériaux",
-      error: error.message
-    });
-  }
-};
-
-/**
- * Get material stock information
+ * Get materials with low stock (below threshold)
  */
 export const getMateriauStock = async (req, res) => {
   try {
-    const tenantId = req.tenantId;
-    const materiauId = req.params.id;
+    const tenantId = req.user.tenant_id;
     
     const query = `
-      SELECT s.*
-      FROM stocks_materiaux_largeur s
-      JOIN materiaux m ON s.materiau_id = m.materiau_id
-      WHERE m.tenant_id = $1 AND m.materiau_id = $2
-      ORDER BY s.largeur ASC
+      SELECT m.materiau_id, m.type_materiau, m.nom, m.description, m.prix_unitaire, m.unite_mesure,
+        json_agg(json_build_object(
+          'stock_id', s.stock_id,
+          'largeur', s.largeur,
+          'quantite_en_stock', s.quantite_en_stock,
+          'unite_mesure', s.unite_mesure,
+          'seuil_alerte', s.seuil_alerte,
+          'est_bas', (s.quantite_en_stock <= s.seuil_alerte)
+        )) as stocks
+      FROM materiaux m
+      JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
+      WHERE m.tenant_id = $1 AND s.quantite_en_stock <= s.seuil_alerte
+      GROUP BY m.materiau_id
+      ORDER BY m.type_materiau, m.nom
     `;
     
-    const result = await pool.query(query, [tenantId, materiauId]);
+    const result = await pool.query(query, [tenantId]);
     
     res.status(200).json({
       success: true,
@@ -172,45 +171,44 @@ export const getMateriauStock = async (req, res) => {
       data: result.rows
     });
   } catch (error) {
-    console.error("Error getting materiau stock:", error);
+    console.error("Error getting materials with low stock:", error);
     res.status(500).json({
       success: false,
-      message: "Erreur lors de la récupération des stocks du matériau",
+      message: "Erreur lors de la récupération des matériaux en stock bas",
       error: error.message
     });
   }
 };
 
 /**
- * Create a new material with stock information
+ * Create a new material with its initial stock information
  */
 export const createMateriau = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    await client.query('BEGIN');
-    
-    const tenantId = req.tenantId;
-    const {
-      type_materiau,
-      nom,
-      description,
-      prix_unitaire,
-      unite_mesure,
+    const tenantId = req.user.tenant_id;
+    const { 
+      type_materiau, 
+      nom, 
+      description, 
+      prix_unitaire, 
+      unite_mesure, 
       options_disponibles,
-      stocks = []
+      stocks 
     } = req.body;
     
-    // Validate required fields
     if (!type_materiau || !prix_unitaire || !unite_mesure) {
       return res.status(400).json({
         success: false,
-        message: "Les champs type_materiau, prix_unitaire et unite_mesure sont obligatoires"
+        message: "Le type de matériau, le prix unitaire et l'unité de mesure sont requis"
       });
     }
     
-    // Insert the new material
-    const materiauQuery = `
+    await client.query('BEGIN');
+    
+    // Create the material
+    const insertMateriauQuery = `
       INSERT INTO materiaux (
         tenant_id, 
         type_materiau, 
@@ -219,107 +217,66 @@ export const createMateriau = async (req, res) => {
         prix_unitaire, 
         unite_mesure, 
         options_disponibles
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7) 
       RETURNING *
     `;
     
     const materiauValues = [
-      tenantId,
-      type_materiau,
-      nom || null,
-      description || null,
-      prix_unitaire,
-      unite_mesure,
+      tenantId, 
+      type_materiau, 
+      nom || null, 
+      description || null, 
+      prix_unitaire, 
+      unite_mesure, 
       options_disponibles || '{}'
     ];
     
-    const materiauResult = await client.query(materiauQuery, materiauValues);
-    const newMateriau = materiauResult.rows[0];
+    const materiauResult = await client.query(insertMateriauQuery, materiauValues);
+    const materiau = materiauResult.rows[0];
     
-    // Insert stock information if provided
+    // Add stock information if provided
+    let stocksData = [];
     if (stocks && stocks.length > 0) {
-      const stockPromises = stocks.map(async (stock) => {
-        const stockQuery = `
-          INSERT INTO stocks_materiaux_largeur (
-            materiau_id,
-            largeur,
-            quantite_en_stock,
-            seuil_alerte,
-            unite_mesure
-          )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
-        `;
-        
+      const insertStockQuery = `
+        INSERT INTO stocks_materiaux_largeur (
+          materiau_id, 
+          largeur, 
+          quantite_en_stock, 
+          seuil_alerte, 
+          unite_mesure
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `;
+      
+      for (const stock of stocks) {
         const stockValues = [
-          newMateriau.materiau_id,
+          materiau.materiau_id,
           stock.largeur,
           stock.quantite_en_stock || 0,
           stock.seuil_alerte || 0,
           stock.unite_mesure || unite_mesure
         ];
         
-        return client.query(stockQuery, stockValues);
-      });
-      
-      await Promise.all(stockPromises);
+        const stockResult = await client.query(insertStockQuery, stockValues);
+        stocksData.push(stockResult.rows[0]);
+      }
     }
     
-    // Log the activity
-    const logQuery = `
-      INSERT INTO journal_activites (
-        tenant_id,
-        employe_id,
-        action,
-        details,
-        entite_affectee,
-        entite_id
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `;
-    
-    const logValues = [
-      tenantId,
-      req.employeId,
-      'create',
-      `Création du matériau: ${nom || type_materiau}`,
-      'materiaux',
-      newMateriau.materiau_id
-    ];
-    
-    await client.query(logQuery, logValues);
-    
     await client.query('COMMIT');
-    
-    // Query to get the complete new material with stock information
-    const getCompleteData = `
-      SELECT m.*, 
-             COALESCE(json_agg(
-               json_build_object(
-                 'stock_id', s.stock_id,
-                 'largeur', s.largeur,
-                 'quantite_en_stock', s.quantite_en_stock,
-                 'seuil_alerte', s.seuil_alerte,
-                 'unite_mesure', s.unite_mesure
-               )
-             ) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
-      FROM materiaux m
-      LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 AND m.materiau_id = $2
-      GROUP BY m.materiau_id
-    `;
-    
-    const completeResult = await pool.query(getCompleteData, [tenantId, newMateriau.materiau_id]);
     
     res.status(201).json({
       success: true,
       message: "Matériau créé avec succès",
-      data: completeResult.rows[0]
+      data: {
+        ...materiau,
+        stocks: stocksData
+      }
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error("Error creating materiau:", error);
+    console.error("Error creating material:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la création du matériau",
@@ -337,27 +294,25 @@ export const updateMateriau = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    await client.query('BEGIN');
-    
-    const tenantId = req.tenantId;
-    const materiauId = req.params.id;
-    const {
-      type_materiau,
-      nom,
-      description,
-      prix_unitaire,
-      unite_mesure,
+    const tenantId = req.user.tenant_id;
+    const { id } = req.params;
+    const { 
+      type_materiau, 
+      nom, 
+      description, 
+      prix_unitaire, 
+      unite_mesure, 
       options_disponibles,
-      stocks = []
+      stocks 
     } = req.body;
     
     // Check if material exists
     const checkQuery = `
       SELECT * FROM materiaux 
-      WHERE tenant_id = $1 AND materiau_id = $2
+      WHERE materiau_id = $1 AND tenant_id = $2
     `;
     
-    const checkResult = await client.query(checkQuery, [tenantId, materiauId]);
+    const checkResult = await client.query(checkQuery, [id, tenantId]);
     
     if (checkResult.rows.length === 0) {
       return res.status(404).json({
@@ -366,9 +321,11 @@ export const updateMateriau = async (req, res) => {
       });
     }
     
-    // Update material
-    const updateQuery = `
-      UPDATE materiaux
+    await client.query('BEGIN');
+    
+    // Update material info
+    const updateMateriauQuery = `
+      UPDATE materiaux 
       SET 
         type_materiau = COALESCE($1, type_materiau),
         nom = COALESCE($2, nom),
@@ -377,31 +334,31 @@ export const updateMateriau = async (req, res) => {
         unite_mesure = COALESCE($5, unite_mesure),
         options_disponibles = COALESCE($6, options_disponibles),
         date_modification = CURRENT_TIMESTAMP
-      WHERE tenant_id = $7 AND materiau_id = $8
+      WHERE materiau_id = $7 AND tenant_id = $8
       RETURNING *
     `;
     
-    const updateValues = [
+    const materiauValues = [
       type_materiau,
       nom,
       description,
       prix_unitaire,
       unite_mesure,
-      options_disponibles ? JSON.stringify(options_disponibles) : null,
-      tenantId,
-      materiauId
+      options_disponibles,
+      id,
+      tenantId
     ];
     
-    const updateResult = await client.query(updateQuery, updateValues);
+    const materiauResult = await client.query(updateMateriauQuery, materiauValues);
     
-    // Update stock information if provided
+    // Handle stock updates if provided
     if (stocks && stocks.length > 0) {
       for (const stock of stocks) {
         if (stock.stock_id) {
           // Update existing stock
           const updateStockQuery = `
             UPDATE stocks_materiaux_largeur
-            SET 
+            SET
               largeur = COALESCE($1, largeur),
               quantite_en_stock = COALESCE($2, quantite_en_stock),
               seuil_alerte = COALESCE($3, seuil_alerte),
@@ -411,16 +368,14 @@ export const updateMateriau = async (req, res) => {
             RETURNING *
           `;
           
-          const updateStockValues = [
+          await client.query(updateStockQuery, [
             stock.largeur,
             stock.quantite_en_stock,
             stock.seuil_alerte,
             stock.unite_mesure,
             stock.stock_id,
-            materiauId
-          ];
-          
-          await client.query(updateStockQuery, updateStockValues);
+            id
+          ]);
         } else {
           // Insert new stock
           const insertStockQuery = `
@@ -435,73 +390,45 @@ export const updateMateriau = async (req, res) => {
             RETURNING *
           `;
           
-          const insertStockValues = [
-            materiauId,
+          await client.query(insertStockQuery, [
+            id,
             stock.largeur,
             stock.quantite_en_stock || 0,
             stock.seuil_alerte || 0,
-            stock.unite_mesure || updateResult.rows[0].unite_mesure
-          ];
-          
-          await client.query(insertStockQuery, insertStockValues);
+            stock.unite_mesure || materiauResult.rows[0].unite_mesure
+          ]);
         }
       }
     }
     
-    // Log the activity
-    const logQuery = `
-      INSERT INTO journal_activites (
-        tenant_id,
-        employe_id,
-        action,
-        details,
-        entite_affectee,
-        entite_id
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `;
-    
-    const logValues = [
-      tenantId,
-      req.employeId,
-      'update',
-      `Mise à jour du matériau: ${updateResult.rows[0].nom || updateResult.rows[0].type_materiau}`,
-      'materiaux',
-      materiauId
-    ];
-    
-    await client.query(logQuery, logValues);
-    
-    await client.query('COMMIT');
-    
-    // Query to get the complete updated material with stock information
-    const getCompleteData = `
+    // Get updated data with stocks
+    const getUpdatedQuery = `
       SELECT m.*, 
-             COALESCE(json_agg(
-               json_build_object(
-                 'stock_id', s.stock_id,
-                 'largeur', s.largeur,
-                 'quantite_en_stock', s.quantite_en_stock,
-                 'seuil_alerte', s.seuil_alerte,
-                 'unite_mesure', s.unite_mesure
-               )
-             ) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
+        COALESCE(json_agg(json_build_object(
+          'stock_id', s.stock_id,
+          'largeur', s.largeur,
+          'quantite_en_stock', s.quantite_en_stock,
+          'unite_mesure', s.unite_mesure,
+          'seuil_alerte', s.seuil_alerte
+        )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 AND m.materiau_id = $2
+      WHERE m.materiau_id = $1 AND m.tenant_id = $2
       GROUP BY m.materiau_id
     `;
     
-    const completeResult = await pool.query(getCompleteData, [tenantId, materiauId]);
+    const updatedResult = await client.query(getUpdatedQuery, [id, tenantId]);
+    
+    await client.query('COMMIT');
     
     res.status(200).json({
       success: true,
       message: "Matériau mis à jour avec succès",
-      data: completeResult.rows[0]
+      data: updatedResult.rows[0]
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error("Error updating materiau:", error);
+    console.error("Error updating material:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la mise à jour du matériau",
@@ -513,24 +440,20 @@ export const updateMateriau = async (req, res) => {
 };
 
 /**
- * Delete a material and all related stock information
+ * Delete a material and its associated stock information
  */
 export const deleteMateriau = async (req, res) => {
-  const client = await pool.connect();
-  
   try {
-    await client.query('BEGIN');
+    const tenantId = req.user.tenant_id;
+    const { id } = req.params;
     
-    const tenantId = req.tenantId;
-    const materiauId = req.params.id;
-    
-    // Check if material exists and get details for logging
+    // Check if material exists
     const checkQuery = `
       SELECT * FROM materiaux 
-      WHERE tenant_id = $1 AND materiau_id = $2
+      WHERE materiau_id = $1 AND tenant_id = $2
     `;
     
-    const checkResult = await client.query(checkQuery, [tenantId, materiauId]);
+    const checkResult = await pool.query(checkQuery, [id, tenantId]);
     
     if (checkResult.rows.length === 0) {
       return res.status(404).json({
@@ -539,80 +462,41 @@ export const deleteMateriau = async (req, res) => {
       });
     }
     
-    const materiau = checkResult.rows[0];
-    
-    // Check if material is used in any order
-    const checkOrdersQuery = `
+    // Check if material is referenced in any commandes
+    const checkUsageQuery = `
       SELECT COUNT(*) FROM details_commande 
       WHERE materiau_id = $1
     `;
     
-    const ordersResult = await client.query(checkOrdersQuery, [materiauId]);
+    const usageResult = await pool.query(checkUsageQuery, [id]);
     
-    if (parseInt(ordersResult.rows[0].count) > 0) {
+    if (parseInt(usageResult.rows[0].count) > 0) {
       return res.status(400).json({
         success: false,
-        message: "Ce matériau est utilisé dans des commandes existantes et ne peut pas être supprimé"
+        message: "Ce matériau est utilisé dans des commandes et ne peut pas être supprimé"
       });
     }
     
-    // Delete stock information first (cascade delete will handle this, but we'll do it explicitly)
-    const deleteStockQuery = `
-      DELETE FROM stocks_materiaux_largeur
-      WHERE materiau_id = $1
-    `;
-    
-    await client.query(deleteStockQuery, [materiauId]);
-    
-    // Delete material
+    // Delete the material (cascade will delete related stocks)
     const deleteQuery = `
-      DELETE FROM materiaux
-      WHERE tenant_id = $1 AND materiau_id = $2
+      DELETE FROM materiaux 
+      WHERE materiau_id = $1 AND tenant_id = $2
       RETURNING *
     `;
     
-    const deleteResult = await client.query(deleteQuery, [tenantId, materiauId]);
-    
-    // Log the activity
-    const logQuery = `
-      INSERT INTO journal_activites (
-        tenant_id,
-        employe_id,
-        action,
-        details,
-        entite_affectee,
-        entite_id
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `;
-    
-    const logValues = [
-      tenantId,
-      req.employeId,
-      'delete',
-      `Suppression du matériau: ${materiau.nom || materiau.type_materiau}`,
-      'materiaux',
-      materiauId
-    ];
-    
-    await client.query(logQuery, logValues);
-    
-    await client.query('COMMIT');
+    const result = await pool.query(deleteQuery, [id, tenantId]);
     
     res.status(200).json({
       success: true,
       message: "Matériau supprimé avec succès",
-      data: deleteResult.rows[0]
+      data: result.rows[0]
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error("Error deleting materiau:", error);
+    console.error("Error deleting material:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la suppression du matériau",
       error: error.message
     });
-  } finally {
-    client.release();
   }
 };
