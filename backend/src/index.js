@@ -17,7 +17,7 @@ import clientRoutes from './routes/client.routes.js';
 import commandeRoutes from './routes/commande.routes.js';
 import materiauRoutes from './routes/materiau.routes.js';
 import paiementRoutes from './routes/paiement.routes.js';
-import remiseRoutes from './routes/remise.routes.js';
+//import remiseRoutes from './routes/remise.routes.js';
 import { swaggerUi, specs } from './config/swagger.js';
 
 /**
@@ -40,9 +40,8 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/commandes', commandeRoutes);
 app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
-app.use('/api/remise', remiseRoutes);
-/**
-*/
+//app.use('/api/remise', remiseRoutes);
+
 
 // Route de base
 app.use('/', swaggerUi.serve, swaggerUi.setup(specs));

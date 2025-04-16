@@ -1,5 +1,3 @@
-// api.ts - Authentication Service
-
 import axios from 'axios';
 
 // Base API configuration
