@@ -1,3 +1,5 @@
+import { Url } from "next/dist/shared/lib/router/router";
+
 // api/types.ts
 export interface Employee {
     employe_id: number;
@@ -19,8 +21,19 @@ export interface Employee {
     email: string | null;
     telephone: string;
     adresse: string | null;
-    date_creation: string;
     derniere_visite: string;
+  }
+
+  export interface Tenant {
+    tenant_id: number;
+    nom: string;
+    prenom: string;
+    email: string | null;
+    telephone: string;
+    adresse: string | null;
+    description: string;
+    logo_url: Url;
+    est_actif: boolean;
   }
   
   export interface Material {
@@ -32,7 +45,6 @@ export interface Employee {
     prix_unitaire: number;
     unite_mesure: string;
     options_disponibles: Record<string, any>;
-    date_creation: string;
     date_modification: string;
   }
   
