@@ -1,9 +1,12 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/shadcn/ui/card"
 import { Activity, DollarSign, Users, Package } from "lucide-react"
 
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
+
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">Welcome back! Here's an overview of your business.</p>
@@ -62,7 +65,6 @@ export default function DashboardPage() {
             <CardDescription>Your most recent orders across all clients</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Placeholder for a chart or recent orders list */}
             <div className="h-[200px] rounded-md bg-muted"></div>
           </CardContent>
         </Card>
@@ -73,7 +75,6 @@ export default function DashboardPage() {
             <CardDescription>Your highest value clients this month</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Placeholder for top clients list */}
             <div className="h-[200px] rounded-md bg-muted"></div>
           </CardContent>
         </Card>

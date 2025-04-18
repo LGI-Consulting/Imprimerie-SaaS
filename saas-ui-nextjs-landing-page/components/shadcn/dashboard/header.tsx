@@ -1,6 +1,6 @@
 "use client"
 
-import { Menu, Bell, LogOut, Settings } from "lucide-react"
+import { Menu, Bell, LogOut, Settings, Sun, Moon } from "lucide-react"
 import { Button } from "#components/shadcn/ui/button"
 import {
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "#components/shadcn/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "#components/shadcn/ui/avatar"
+import { useColorMode } from "@chakra-ui/react"
+import { useState, useEffect } from "react"
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -26,6 +28,14 @@ interface HeaderProps {
 }
 
 export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: HeaderProps) {
+  const { colorMode, toggleColorMode } = useColorMode()
+  const [mounted, setMounted] = useState(false)
+
+  // To avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
       <div className="flex items-center gap-2 md:hidden">
@@ -46,6 +56,10 @@ export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: Hea
           <Bell className="h-5 w-5" />
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary"></span>
           <span className="sr-only">Notifications</span>
+        </Button>
+
+        <Button variant="ghost" size="icon" onClick={toggleColorMode} aria-label="Toggle color mode">
+          {mounted ? (colorMode === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />) : null}
         </Button>
 
         <DropdownMenu>

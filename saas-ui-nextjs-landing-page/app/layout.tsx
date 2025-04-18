@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import { ColorModeScript, theme } from '@chakra-ui/react'
 import { ThemeProvider } from "#components/shadcn/theme-provider"
 import { Provider } from './provider'
+import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,32 +22,12 @@ export default function RootLayout({
   return (
     <html 
       lang="en" 
-      data-theme={colorMode} 
-      style={{ colorScheme: colorMode }}
     >
       <head>
-        <link
-          rel="apple-touch-icon"
-          sizes="76x76"
-          href="/static/favicons/apple-touch-icon.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
-          href="/static/favicons/favicon-32x32.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="16x16"
-          href="/static/favicons/favicon-16x16.png"
-        />
-        <link rel="manifest" href="/static/favicons/manifest.json" />
+      <ColorModeScript initialColorMode={colorMode} />
       </head>
-      <body className={`${inter.className} chakra-ui-${colorMode}`}>
-        <ColorModeScript initialColorMode={colorMode} />
-        <ThemeProvider attribute="class" defaultTheme="light">
+      <body>
+        <ThemeProvider>
           <Provider>{children}</Provider>
         </ThemeProvider>
       </body>
