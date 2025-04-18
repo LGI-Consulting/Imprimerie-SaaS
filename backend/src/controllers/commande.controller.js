@@ -1,4 +1,4 @@
-import pool from '../config/database.js';
+import pool from "../config/db.js";
 
 // Récupérer toutes les commandes
 export const getAllOrders = async (req, res) => {

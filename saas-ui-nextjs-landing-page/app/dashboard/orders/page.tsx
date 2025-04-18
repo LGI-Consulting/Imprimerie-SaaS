@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Filter, Plus, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "#components/shadcn/ui/button"
 import { Input } from "#components/shadcn/ui/input"
@@ -8,88 +8,98 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "#
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
 import { Badge } from "#components/shadcn/ui/badge"
 import { Card, CardContent } from "#components/shadcn/ui/card"
-
-// Sample data for orders
-const orders = [
-  {
-    id: "ORD-001",
-    clientName: "John Smith",
-    date: "2023-04-15",
-    status: "Completed",
-  },
-  {
-    id: "ORD-002",
-    clientName: "Sarah Johnson",
-    date: "2023-04-16",
-    status: "Processing",
-  },
-  {
-    id: "ORD-003",
-    clientName: "Michael Brown",
-    date: "2023-04-17",
-    status: "Pending",
-  },
-  {
-    id: "ORD-004",
-    clientName: "Emily Davis",
-    date: "2023-04-18",
-    status: "Completed",
-  },
-  {
-    id: "ORD-005",
-    clientName: "David Wilson",
-    date: "2023-04-19",
-    status: "Cancelled",
-  },
-  {
-    id: "ORD-006",
-    clientName: "Lisa Martinez",
-    date: "2023-04-20",
-    status: "Processing",
-  },
-  {
-    id: "ORD-007",
-    clientName: "Robert Taylor",
-    date: "2023-04-21",
-    status: "Pending",
-  },
-  {
-    id: "ORD-008",
-    clientName: "Jennifer Anderson",
-    date: "2023-04-22",
-    status: "Completed",
-  },
-]
+import { OrderApi, ClientApi } from "../../../lib/api"
+import { Order, Client } from "../../../lib/api/types"
 
 export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [orders, setOrders] = useState<Order[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [ordersData, clientsData] = await Promise.all([
+          OrderApi.getAll(),
+          ClientApi.getAll()
+        ])
+        setOrders(ordersData)
+        setClients(clientsData)
+      } catch (error) {
+        console.error("Failed to fetch data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // Get client name by ID
+  const getClientName = (clientId: number | null) => {
+    if (!clientId) return "Unknown Client"
+    const client = clients.find(c => c.client_id === clientId)
+    return client ? `${client.prenom} ${client.nom}` : "Unknown Client"
+  }
 
   // Filter orders based on search query and status filter
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.clientName.toLowerCase().includes(searchQuery.toLowerCase())
+      order.numero_commande?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getClientName(order.client_id).toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesStatus = statusFilter === "all" || order.status.toLowerCase() === statusFilter.toLowerCase()
+    const matchesStatus = 
+      statusFilter === "all" || 
+      order.statut.toLowerCase() === statusFilter.toLowerCase()
 
     return matchesSearch && matchesStatus
   })
 
+  // Pagination
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
   // Status badge color mapping
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "completed":
+      case "terminée":
+      case "livrée":
         return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "processing":
+      case "en_impression":
         return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "pending":
+      case "reçue":
+      case "payée":
         return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-      case "cancelled":
-        return "bg-red-100 text-red-800 hover:bg-red-100"
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-100"
     }
+  }
+
+  // Format status for display
+  const formatStatus = (status: string) => {
+    switch (status) {
+      case "reçue": return "Received"
+      case "payée": return "Paid"
+      case "en_impression": return "In Progress"
+      case "terminée": return "Completed"
+      case "livrée": return "Delivered"
+      default: return status
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    )
   }
 
   return (
@@ -126,10 +136,11 @@ export default function OrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="reçue">Received</SelectItem>
+                  <SelectItem value="payée">Paid</SelectItem>
+                  <SelectItem value="en_impression">In Progress</SelectItem>
+                  <SelectItem value="terminée">Completed</SelectItem>
+                  <SelectItem value="livrée">Delivered</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -143,20 +154,32 @@ export default function OrdersPage() {
                   <TableHead>Client Name</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>{order.clientName}</TableCell>
-                      <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
+                {paginatedOrders.length > 0 ? (
+                  paginatedOrders.map((order) => (
+                    <TableRow key={order.commande_id}>
+                      <TableCell className="font-medium">{order.numero_commande}</TableCell>
+                      <TableCell>{getClientName(order.client_id)}</TableCell>
+                      <TableCell>{new Date(order.date_creation).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusColor(order.status)}>
-                          {order.status}
+                        <Badge variant="outline" className={getStatusColor(order.statut)}>
+                          {formatStatus(order.statut)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {order.priorite > 0 ? (
+                          <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-100">
+                            High
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                            Normal
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -172,7 +195,7 @@ export default function OrdersPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No orders found.
                     </TableCell>
                   </TableRow>
@@ -182,11 +205,24 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex items-center justify-end space-x-2 py-4">
-            <Button variant="outline" size="sm" disabled>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
               <ChevronLeft className="h-4 w-4" />
               Previous
             </Button>
-            <Button variant="outline" size="sm">
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
               Next
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>

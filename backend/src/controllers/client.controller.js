@@ -1,4 +1,4 @@
-import pool from '../config/database.js'; // Assuming you have a PostgreSQL connection pool setup
+import pool from "../config/db.js";
 
 // Récupérer tous les clients d'un tenant
 export const getAllClients = async (req, res) => {

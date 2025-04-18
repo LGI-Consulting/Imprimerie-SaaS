@@ -1,4 +1,4 @@
-import pool from '../config/database.js';
+import pool from "../config/db.js";
 import bcrypt from 'bcrypt';
 
 // Récupérer tous les employés d'un tenant

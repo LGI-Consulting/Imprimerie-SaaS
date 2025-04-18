@@ -19,7 +19,7 @@ import materiauRoutes from './routes/materiau.routes.js';
 import paiementRoutes from './routes/paiement.routes.js';
 import employeRoutes from './routes/employe.routes.js';
 //import remiseRoutes from './routes/remise.routes.js';
-import { swaggerUi, specs } from './config/swagger.js';
+//import { swaggerUi, specs } from './config/swagger.js';
 
 /**
 const materiauRoutes = require('./routes/materiau.routes');
@@ -46,7 +46,6 @@ app.use('/api/employe', employeRoutes);
 
 
 // Route de base
-app.use('/', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Middleware de gestion d'erreurs
 app.use((err, req, res, next) => {

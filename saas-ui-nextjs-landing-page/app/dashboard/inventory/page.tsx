@@ -1,79 +1,33 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Plus, Edit } from "lucide-react"
 import { Button } from "#components/shadcn/ui/button"
 import { Input } from "#components/shadcn/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
 import { Card, CardContent } from "#components/shadcn/ui/card"
-
-// Sample data for inventory
-const materials = [
-  {
-    id: 1,
-    name: "Cotton Fabric",
-    stockQuantity: 500,
-    unitPrice: 5.99,
-    lastUpdated: "2023-04-15",
-  },
-  {
-    id: 2,
-    name: "Polyester Blend",
-    stockQuantity: 350,
-    unitPrice: 4.5,
-    lastUpdated: "2023-04-12",
-  },
-  {
-    id: 3,
-    name: "Denim",
-    stockQuantity: 200,
-    unitPrice: 8.75,
-    lastUpdated: "2023-04-10",
-  },
-  {
-    id: 4,
-    name: "Silk",
-    stockQuantity: 100,
-    unitPrice: 15.99,
-    lastUpdated: "2023-04-08",
-  },
-  {
-    id: 5,
-    name: "Wool",
-    stockQuantity: 150,
-    unitPrice: 12.25,
-    lastUpdated: "2023-04-05",
-  },
-  {
-    id: 6,
-    name: "Linen",
-    stockQuantity: 180,
-    unitPrice: 9.5,
-    lastUpdated: "2023-04-03",
-  },
-  {
-    id: 7,
-    name: "Leather",
-    stockQuantity: 75,
-    unitPrice: 22.99,
-    lastUpdated: "2023-03-30",
-  },
-  {
-    id: 8,
-    name: "Buttons (pack of 100)",
-    stockQuantity: 50,
-    unitPrice: 3.99,
-    lastUpdated: "2023-03-28",
-  },
-]
+import { MaterialApi } from "../../../lib/api"
+import { Material } from "../../../lib/api/types"
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [materials, setMaterials] = useState<Material[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Filter materials based on search query
-  const filteredMaterials = materials.filter((material) =>
-    material.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const materialsData = await MaterialApi.getAll()
+        setMaterials(materialsData)
+      } catch (error) {
+        console.error("Failed to fetch materials:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -81,6 +35,20 @@ export default function InventoryPage() {
       style: "currency",
       currency: "USD",
     }).format(amount)
+  }
+
+  // Filter materials based on search query
+  const filteredMaterials = materials.filter((material) =>
+    material.nom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    material.type_materiau.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    )
   }
 
   return (
@@ -102,7 +70,7 @@ export default function InventoryPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search materials by name..."
+              placeholder="Search materials by name or type..."
               className="pl-8 w-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -114,8 +82,9 @@ export default function InventoryPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Material Name</TableHead>
-                  <TableHead>Stock Quantity</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Unit Price</TableHead>
+                  <TableHead>Measurement Unit</TableHead>
                   <TableHead>Last Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -123,11 +92,12 @@ export default function InventoryPage() {
               <TableBody>
                 {filteredMaterials.length > 0 ? (
                   filteredMaterials.map((material) => (
-                    <TableRow key={material.id}>
-                      <TableCell className="font-medium">{material.name}</TableCell>
-                      <TableCell>{material.stockQuantity}</TableCell>
-                      <TableCell>{formatCurrency(material.unitPrice)}</TableCell>
-                      <TableCell>{new Date(material.lastUpdated).toLocaleDateString()}</TableCell>
+                    <TableRow key={material.materiau_id}>
+                      <TableCell className="font-medium">{material.nom}</TableCell>
+                      <TableCell>{material.type_materiau}</TableCell>
+                      <TableCell>{formatCurrency(material.prix_unitaire)}</TableCell>
+                      <TableCell>{material.unite_mesure}</TableCell>
+                      <TableCell>{new Date(material.date_modification).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" title="Edit Material">
                           <Edit className="h-4 w-4" />
@@ -137,7 +107,7 @@ export default function InventoryPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No materials found.
                     </TableCell>
                   </TableRow>
