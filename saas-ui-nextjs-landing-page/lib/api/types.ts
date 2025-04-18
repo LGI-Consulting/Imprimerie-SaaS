@@ -21,6 +21,7 @@ export interface Employee {
     email: string | null;
     telephone: string;
     adresse: string | null;
+    date_creation: string;
     derniere_visite: string;
   }
 
@@ -32,7 +33,8 @@ export interface Employee {
     telephone: string;
     adresse: string | null;
     description: string;
-    logo_url: Url;
+    logo_url: string;
+    date_creation: string;
     est_actif: boolean;
   }
   
@@ -45,6 +47,7 @@ export interface Employee {
     prix_unitaire: number;
     unite_mesure: string;
     options_disponibles: Record<string, any>;
+    date_creation: string;
     date_modification: string;
   }
   

@@ -37,37 +37,37 @@ export function DashboardSidebar({ isOpen, onToggle, currentUser, currentTenant 
   const routes = [
     {
       name: "Dashboard",
-      href: "/dashboard",
+      href: "/admin/dashboard",
       icon: LayoutDashboard,
     },
     {
       name: "Orders",
-      href: "/dashboard/orders",
+      href: "/admin/dashboard/orders",
       icon: ShoppingCart,
     },
     {
       name: "Clients",
-      href: "/dashboard/clients",
+      href: "/admin/dashboard/clients",
       icon: Users,
     },
     {
       name: "Inventory",
-      href: "/dashboard/inventory",
+      href: "/admin/dashboard/inventory",
       icon: Package,
     },
     {
       name: "Payments",
-      href: "/dashboard/payments",
+      href: "/admin/dashboard/payments",
       icon: CreditCard,
     },
     {
       name: "Employees",
-      href: "/dashboard/employees",
+      href: "/admin/dashboard/employees",
       icon: UserRound,
     },
     {
       name: "Settings",
-      href: "/dashboard/settings",
+      href: "/admin/dashboard/settings",
       icon: Settings,
     },
   ]

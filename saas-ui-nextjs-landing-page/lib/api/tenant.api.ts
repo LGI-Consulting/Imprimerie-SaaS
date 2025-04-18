@@ -2,7 +2,7 @@
 import apiClient from './apiClient';
 import { Tenant } from './types';
 
-export const ClientApi = {
+export const TenantApi = {
   getAll: async (): Promise<Tenant[]> => {
     return apiClient.get('/tenants');
   },

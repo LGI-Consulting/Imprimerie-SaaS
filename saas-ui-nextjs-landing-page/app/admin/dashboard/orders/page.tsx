@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "#
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
 import { Badge } from "#components/shadcn/ui/badge"
 import { Card, CardContent } from "#components/shadcn/ui/card"
-import { OrderApi, ClientApi } from "../../../lib/api"
-import { Order, Client } from "../../../lib/api/types"
+import { OrderApi, ClientApi } from "../../../../lib/api"
+import { Order, Client } from "../../../../lib/api/types"
 
 export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState("")

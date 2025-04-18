@@ -21,116 +21,104 @@ import {
   TabPanels,
   Tab,
   TabPanel,
-  HStack,
-  Flex
+  Spinner
 } from '@chakra-ui/react'
 import { BackgroundGradient } from 'components/gradients/background-gradient'
 import { PageTransition } from 'components/motion/page-transition'
 import { Section } from 'components/section'
-import { NextPage } from 'next'
-import authService from '../lib/api-login' // Import the auth service
+import authService from '../lib/api-login'
+import { Tenant } from '../../../lib/api/types'
+import { TenantApi } from 'lib/api/tenant.api'
 
-interface Tenant {
-  tenant_id: number;
-  nom: string;
-}
-
-const Login: NextPage = () => {
-  // Employee login state
+const LoginPage = () => {
+  // State for employee login
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [tenantId, setTenantId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [tenants, setTenants] = useState<Tenant[]>([])
-  const [errors, setErrors] = useState<{
-    email?: string;
-    password?: string;
-    tenant?: string;
-    adminEmail?: string;
-    adminPassword?: string;
-  }>({})
   
-  // Super admin login state
+  // State for admin login
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [isAdminLoading, setIsAdminLoading] = useState(false)
   
+  // Error handling
+  const [errors, setErrors] = useState({
+    email: '',
+    password: '',
+    tenant: '',
+    adminEmail: '',
+    adminPassword: ''
+  })
+
   const toast = useToast()
   const router = useRouter()
 
-  // This would typically come from an API call to fetch available tenants
+  // Fetch tenants on mount
   useEffect(() => {
-    // In a real implementation, you would fetch tenants from an API
-    // For example: const fetchTenants = async () => { const result = await api.getTenants(); setTenants(result.data); };
-    
-    // Mock data for demonstration
-    setTenants([
-      { tenant_id: 1, nom: 'Entreprise A' },
-      { tenant_id: 2, nom: 'Entreprise B' },
-      { tenant_id: 3, nom: 'Entreprise C' },
-    ])
-    
-    // Check if we have a previously selected tenant
-    const savedTenantId = localStorage.getItem('lastTenantId')
-    if (savedTenantId) {
-      setTenantId(savedTenantId)
+    const fetchTenants = async () => {
+      try {
+       const tenants = await TenantApi.getAll()
+       setTenants(tenants)
+      } catch (error) {
+        console.error('Failed to fetch tenants:', error)
+      }
     }
+
+    fetchTenants()
   }, [])
 
+  // Validate employee form
   const validateEmployeeForm = () => {
-    const newErrors: {
-      email?: string;
-      password?: string;
-      tenant?: string;
-    } = {}
+    const newErrors = { ...errors, email: '', password: '', tenant: '' }
     let isValid = true
 
     if (!email) {
-      newErrors.email = 'Email requis'
+      newErrors.email = 'Email is required'
       isValid = false
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Email invalide'
+      newErrors.email = 'Invalid email format'
       isValid = false
     }
 
     if (!password) {
-      newErrors.password = 'Mot de passe requis'
+      newErrors.password = 'Password is required'
       isValid = false
     }
 
     if (!tenantId) {
-      newErrors.tenant = 'Veuillez sélectionner une entreprise'
+      newErrors.tenant = 'Please select a tenant'
       isValid = false
     }
 
-    setErrors(prev => ({ ...prev, ...newErrors }))
+    setErrors(newErrors)
     return isValid
   }
 
+  // Validate admin form
   const validateAdminForm = () => {
-    const newErrors: {
-      adminEmail?: string;
-      adminPassword?: string;
-    } = {}
+    const newErrors = { ...errors, adminEmail: '', adminPassword: '' }
     let isValid = true
 
     if (!adminEmail) {
-      newErrors.adminEmail = 'Email requis'
+      newErrors.adminEmail = 'Email is required'
       isValid = false
     } else if (!/\S+@\S+\.\S+/.test(adminEmail)) {
-      newErrors.adminEmail = 'Email invalide'
+      newErrors.adminEmail = 'Invalid email format'
       isValid = false
     }
 
     if (!adminPassword) {
-      newErrors.adminPassword = 'Mot de passe requis'
+      newErrors.adminPassword = 'Password is required'
       isValid = false
     }
 
-    setErrors(prev => ({ ...prev, ...newErrors }))
+    setErrors(newErrors)
     return isValid
   }
 
+  // Handle employee login
   const handleEmployeeLogin = async () => {
     if (!validateEmployeeForm()) return
     
@@ -144,23 +132,20 @@ const Login: NextPage = () => {
       })
       
       if (response.success) {
-        // Save last used tenant ID for convenience
-        localStorage.setItem('lastTenantId', tenantId)
-        
         toast({
-          title: 'Connexion réussie',
-          description: `Bienvenue ${response.data?.nom} ${response.data?.prenom}`,
+          title: 'Login successful',
+          description: `Welcome ${response.data?.prenom} ${response.data?.nom}`,
           status: 'success',
           duration: 3000,
           isClosable: true,
         })
         
-        // Redirect to dashboard
+        // Redirect based on role
         router.push('/dashboard')
       } else {
         toast({
-          title: 'Échec de la connexion',
-          description: response.message,
+          title: 'Login failed',
+          description: response.message || 'Invalid credentials',
           status: 'error',
           duration: 5000,
           isClosable: true,
@@ -168,8 +153,8 @@ const Login: NextPage = () => {
       }
     } catch (error: any) {
       toast({
-        title: 'Erreur de connexion',
-        description: error.message || 'Une erreur est survenue lors de la connexion',
+        title: 'Login error',
+        description: error.message || 'An error occurred during login',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -179,6 +164,7 @@ const Login: NextPage = () => {
     }
   }
 
+  // Handle admin login
   const handleAdminLogin = async () => {
     if (!validateAdminForm()) return
     
@@ -192,19 +178,18 @@ const Login: NextPage = () => {
       
       if (response.success) {
         toast({
-          title: 'Connexion Super Admin réussie',
-          description: `Bienvenue ${response.data?.nom} ${response.data?.prenom}`,
+          title: 'Admin login successful',
+          description: `Welcome ${response.data?.prenom} ${response.data?.nom}`,
           status: 'success',
           duration: 3000,
           isClosable: true,
         })
         
-        // Redirect to admin dashboard
         router.push('/admin/dashboard')
       } else {
         toast({
-          title: 'Échec de la connexion',
-          description: response.message,
+          title: 'Admin login failed',
+          description: response.message || 'Invalid admin credentials',
           status: 'error',
           duration: 5000,
           isClosable: true,
@@ -212,8 +197,8 @@ const Login: NextPage = () => {
       }
     } catch (error: any) {
       toast({
-        title: 'Erreur de connexion',
-        description: error.message || 'Une erreur est survenue lors de la connexion',
+        title: 'Admin login error',
+        description: error.message || 'An error occurred during admin login',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -223,43 +208,44 @@ const Login: NextPage = () => {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent, loginType: 'employee' | 'admin') => {
+  // Handle enter key press
+  const handleKeyDown = (e: React.KeyboardEvent, type: 'employee' | 'admin') => {
     if (e.key === 'Enter') {
-      if (loginType === 'employee') {
-        handleEmployeeLogin()
-      } else {
-        handleAdminLogin()
-      }
+      type === 'employee' ? handleEmployeeLogin() : handleAdminLogin()
     }
   }
 
   return (
-    <Section height="calc(100vh - 200px)" innerWidth="container.sm">
+    <Section height="100vh" innerWidth="container.sm">
       <BackgroundGradient zIndex="-1" />
-      <Center height="100%" pt="20">
+      <Center height="100%">
         <PageTransition width="100%">
-          <Box bg="whiteAlpha.100" p={8} borderRadius="lg" backdropFilter="blur(10px)" boxShadow="xl" width="100%">
-            <VStack spacing={6} width="100%" align="start">
-              <Heading size="lg">Connexion</Heading>
+          <Box 
+            bg="whiteAlpha.900" 
+            p={8} 
+            borderRadius="lg" 
+            boxShadow="xl" 
+            width="100%"
+            maxWidth="500px"
+          >
+            <VStack spacing={6} align="stretch">
+              <Heading size="lg" textAlign="center">Print Management System</Heading>
               
-              <Tabs width="100%" variant="soft-rounded" colorScheme="blue" isFitted>
-                <TabList mb="1em">
-                  <Tab>Employé</Tab>
-                  <Tab>Super Admin</Tab>
+              <Tabs variant="soft-rounded" colorScheme="blue" isFitted>
+                <TabList mb={4}>
+                  <Tab>Employee</Tab>
+                  <Tab>Admin</Tab>
                 </TabList>
                 
                 <TabPanels>
-                  {/* Employé Login Panel */}
+                  {/* Employee Login */}
                   <TabPanel p={0}>
-                    <VStack spacing={5} align="stretch">
-                      <Text>Connectez-vous à votre espace entreprise</Text>
-                      <Divider />
-                      
+                    <VStack spacing={4}>
                       <FormControl isInvalid={!!errors.tenant}>
-                        <FormLabel>Entreprise</FormLabel>
-                        <Select 
-                          placeholder="Sélectionnez votre entreprise" 
-                          value={tenantId} 
+                        <FormLabel>Company</FormLabel>
+                        <Select
+                          placeholder="Select your company"
+                          value={tenantId}
                           onChange={(e) => setTenantId(e.target.value)}
                         >
                           {tenants.map((tenant) => (
@@ -274,8 +260,8 @@ const Login: NextPage = () => {
                       <FormControl isInvalid={!!errors.email}>
                         <FormLabel>Email</FormLabel>
                         <Input
-                          placeholder="votre@email.com"
                           type="email"
+                          placeholder="your@email.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'employee')}
@@ -284,10 +270,10 @@ const Login: NextPage = () => {
                       </FormControl>
                       
                       <FormControl isInvalid={!!errors.password}>
-                        <FormLabel>Mot de passe</FormLabel>
+                        <FormLabel>Password</FormLabel>
                         <Input
-                          placeholder="Mot de passe"
                           type="password"
+                          placeholder="Password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'employee')}
@@ -295,30 +281,27 @@ const Login: NextPage = () => {
                         <FormErrorMessage>{errors.password}</FormErrorMessage>
                       </FormControl>
                       
-                      <Button 
-                        colorScheme="blue" 
-                        width="100%" 
+                      <Button
+                        colorScheme="blue"
+                        mt={4}
+                        width="100%"
                         onClick={handleEmployeeLogin}
                         isLoading={isLoading}
-                        loadingText="Connexion..."
-                        mt={2}
+                        loadingText="Signing in..."
                       >
-                        Se connecter
+                        Employee Login
                       </Button>
                     </VStack>
                   </TabPanel>
                   
-                  {/* Super Admin Login Panel */}
+                  {/* Admin Login */}
                   <TabPanel p={0}>
-                    <VStack spacing={5} align="stretch">
-                      <Text>Espace réservé aux administrateurs système</Text>
-                      <Divider />
-                      
+                    <VStack spacing={4}>
                       <FormControl isInvalid={!!errors.adminEmail}>
-                        <FormLabel>Email Admin</FormLabel>
+                        <FormLabel>Admin Email</FormLabel>
                         <Input
-                          placeholder="admin@example.com"
                           type="email"
+                          placeholder="admin@company.com"
                           value={adminEmail}
                           onChange={(e) => setAdminEmail(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'admin')}
@@ -327,10 +310,10 @@ const Login: NextPage = () => {
                       </FormControl>
                       
                       <FormControl isInvalid={!!errors.adminPassword}>
-                        <FormLabel>Mot de passe</FormLabel>
+                        <FormLabel>Password</FormLabel>
                         <Input
-                          placeholder="Mot de passe"
                           type="password"
+                          placeholder="Admin password"
                           value={adminPassword}
                           onChange={(e) => setAdminPassword(e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'admin')}
@@ -338,15 +321,15 @@ const Login: NextPage = () => {
                         <FormErrorMessage>{errors.adminPassword}</FormErrorMessage>
                       </FormControl>
                       
-                      <Button 
-                        colorScheme="purple" 
-                        width="100%" 
+                      <Button
+                        colorScheme="purple"
+                        mt={4}
+                        width="100%"
                         onClick={handleAdminLogin}
                         isLoading={isAdminLoading}
-                        loadingText="Connexion..."
-                        mt={2}
+                        loadingText="Signing in..."
                       >
-                        Connexion Super Admin
+                        Admin Login
                       </Button>
                     </VStack>
                   </TabPanel>
@@ -360,4 +343,4 @@ const Login: NextPage = () => {
   )
 }
 
-export default Login
+export default LoginPage
