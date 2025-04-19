@@ -7,6 +7,7 @@ export const getAllClients = async (req, res) => {
     
     const query = 'SELECT * FROM clients WHERE tenant_id = $1';
     const { rows } = await pool.query(query, [tenantId]);
+
     
     res.status(200).json(rows);
   } catch (error) {

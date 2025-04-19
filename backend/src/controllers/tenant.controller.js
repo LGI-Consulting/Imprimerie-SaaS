@@ -38,6 +38,8 @@ async function getAllTenants(req, res) {
       ]
     );
 
+    console.log("tenant fait")
+
     res.status(200).json({
       success: true,
       data: tenantsResult.rows,

@@ -92,3 +92,27 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  [data-receipt-content],
+  [data-receipt-content] * {
+    visibility: visible;
+  }
+
+  [data-receipt-content] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20px;
+    background-color: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

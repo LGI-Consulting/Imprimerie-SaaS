@@ -21,14 +21,23 @@ import {
   TabPanels,
   Tab,
   TabPanel,
-  Spinner
+  Spinner,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react'
 import { BackgroundGradient } from 'components/gradients/background-gradient'
 import { PageTransition } from 'components/motion/page-transition'
 import { Section } from 'components/section'
 import authService from '../lib/api-login'
+import { TenantApi } from '../../../lib/api/tenant.api'
 import { Tenant } from '../../../lib/api/types'
-import { TenantApi } from 'lib/api/tenant.api'
+
+// Define a response type for handling multiple possible formats
+interface ApiResponse<T> {
+  success?: boolean;
+  data?: T;
+  message?: string;
+}
 
 const LoginPage = () => {
   // State for employee login
@@ -37,6 +46,8 @@ const LoginPage = () => {
   const [tenantId, setTenantId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [isLoadingTenants, setIsLoadingTenants] = useState(true)
+  const [tenantError, setTenantError] = useState('')
   
   // State for admin login
   const [adminEmail, setAdminEmail] = useState('')
@@ -58,11 +69,28 @@ const LoginPage = () => {
   // Fetch tenants on mount
   useEffect(() => {
     const fetchTenants = async () => {
+      setIsLoadingTenants(true)
+      setTenantError('')
+      
       try {
-       const tenants = await TenantApi.getAll()
-       setTenants(tenants)
+        // Cast the result to handle potential different response formats
+        const result = await TenantApi.getAll() as Tenant[] | ApiResponse<Tenant[]>
+        
+        if (Array.isArray(result)) {
+          // Direct array of tenants
+          setTenants(result)
+        } else if (result && typeof result === 'object' && 'data' in result && Array.isArray(result.data)) {
+          // Object with data property that's an array
+          setTenants(result.data)
+        } else {
+          console.error('Unexpected tenant data format:', result)
+          setTenantError('Failed to load companies - unexpected data format')
+        }
       } catch (error) {
         console.error('Failed to fetch tenants:', error)
+        setTenantError('Failed to load companies. Please try again later.')
+      } finally {
+        setIsLoadingTenants(false)
       }
     }
 
@@ -88,7 +116,7 @@ const LoginPage = () => {
     }
 
     if (!tenantId) {
-      newErrors.tenant = 'Please select a tenant'
+      newErrors.tenant = 'Please select a company'
       isValid = false
     }
 
@@ -243,17 +271,30 @@ const LoginPage = () => {
                     <VStack spacing={4}>
                       <FormControl isInvalid={!!errors.tenant}>
                         <FormLabel>Company</FormLabel>
-                        <Select
-                          placeholder="Select your company"
-                          value={tenantId}
-                          onChange={(e) => setTenantId(e.target.value)}
-                        >
-                          {tenants.map((tenant) => (
-                            <option key={tenant.tenant_id} value={tenant.tenant_id}>
-                              {tenant.nom}
-                            </option>
-                          ))}
-                        </Select>
+                        {isLoadingTenants ? (
+                          <Center py={2}>
+                            <Spinner size="sm" mr={2} />
+                            <Text fontSize="sm">Loading companies...</Text>
+                          </Center>
+                        ) : tenantError ? (
+                          <Alert status="error" size="sm" borderRadius="md">
+                            <AlertIcon />
+                            {tenantError}
+                          </Alert>
+                        ) : (
+                          <Select
+                            placeholder="Select your company"
+                            value={tenantId}
+                            onChange={(e) => setTenantId(e.target.value)}
+                            isDisabled={isLoadingTenants}
+                          >
+                            {tenants.map((tenant) => (
+                              <option key={tenant.tenant_id} value={tenant.tenant_id}>
+                                {tenant.nom}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
                         <FormErrorMessage>{errors.tenant}</FormErrorMessage>
                       </FormControl>
                       
@@ -288,6 +329,7 @@ const LoginPage = () => {
                         onClick={handleEmployeeLogin}
                         isLoading={isLoading}
                         loadingText="Signing in..."
+                        isDisabled={isLoadingTenants}
                       >
                         Employee Login
                       </Button>

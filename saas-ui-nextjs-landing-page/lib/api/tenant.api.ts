@@ -1,4 +1,3 @@
-// api/client.api.ts
 import apiClient from './apiClient';
 import { Tenant } from './types';
 
@@ -13,9 +12,9 @@ export const TenantApi = {
     return apiClient.get(`/tenants/${id}/stats`);
   },
   update: async (id: number, data: Partial<Tenant>): Promise<Tenant> => {
-    return apiClient.put(`/clients/${id}`, data);
+    return apiClient.put(`/tenants/${id}`, data);
   },
   patch: async (id: number): Promise<void> => {
-    return apiClient.patch(`/tenant/${id}/toggle-status`);
+    return apiClient.patch(`/tenants/${id}/toggle-status`);
   }
 };
