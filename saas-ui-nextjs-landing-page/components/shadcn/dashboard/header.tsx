@@ -1,7 +1,7 @@
 "use client"
 
 import { Menu, LogOut, Settings } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/shadcn/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +9,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
-import { ThemeToggle } from "@/components/theme-toggle"
+} from "@/components/shadcn/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/shadcn/ui/avatar"
+import { ThemeToggle } from "@/components/shadcn/theme-toggle"
 import Link from "next/link"
 
 interface HeaderProps {
