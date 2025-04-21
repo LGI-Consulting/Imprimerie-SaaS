@@ -12,10 +12,11 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  FileBarChart,
 } from "lucide-react"
-import { cn } from "#components/lib/utils"
-import { Button } from "#components/shadcn/ui/button"
-import { ScrollArea } from "#components/shadcn/ui/scroll-area"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface SidebarProps {
   isOpen: boolean
@@ -37,37 +38,42 @@ export function DashboardSidebar({ isOpen, onToggle, currentUser, currentTenant 
   const routes = [
     {
       name: "Dashboard",
-      href: "/admin/dashboard",
+      href: "/dashboard",
       icon: LayoutDashboard,
     },
     {
       name: "Orders",
-      href: "/admin/dashboard/orders",
+      href: "/dashboard/orders",
       icon: ShoppingCart,
     },
     {
       name: "Clients",
-      href: "/admin/dashboard/clients",
+      href: "/dashboard/clients",
       icon: Users,
     },
     {
       name: "Inventory",
-      href: "/admin/dashboard/inventory",
+      href: "/dashboard/inventory",
       icon: Package,
     },
     {
       name: "Payments",
-      href: "/admin/dashboard/payments",
+      href: "/dashboard/payments",
       icon: CreditCard,
     },
     {
+      name: "Reports",
+      href: "/dashboard/reports",
+      icon: FileBarChart,
+    },
+    {
       name: "Employees",
-      href: "/admin/dashboard/employees",
+      href: "/dashboard/employees",
       icon: UserRound,
     },
     {
       name: "Settings",
-      href: "/admin/dashboard/settings",
+      href: "/dashboard/settings",
       icon: Settings,
     },
   ]
@@ -105,7 +111,7 @@ export function DashboardSidebar({ isOpen, onToggle, currentUser, currentTenant 
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   pathname === route.href
                     ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-muted",
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   !isOpen && "justify-center px-0",
                 )}
               >

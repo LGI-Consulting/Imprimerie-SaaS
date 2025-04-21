@@ -1,8 +1,8 @@
 "use client"
 
 import { AlertTriangle, X } from "lucide-react"
-import { Alert, AlertDescription } from "#components/shadcn/ui/alert"
-import { Button } from "#components/shadcn/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 
 interface UnauthorizedAlertProps {
   onDismiss: () => void

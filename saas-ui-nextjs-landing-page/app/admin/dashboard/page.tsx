@@ -3,8 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/shadcn/ui/card"
 import { Activity, DollarSign, Users, Package } from "lucide-react"
 import { useEffect, useState } from "react"
-import { OrderApi, ClientApi, PaymentApi, MaterialApi } from "../../../lib/api"
-import { Order, Client, Payment, Material } from "../../../lib/api/types"
+import { OrderApi, ClientApi, PaymentApi, MaterialApi } from "../../../lib/utils/api"
+import { Order, Client, Payment, Material } from "../../../lib/utils/api/types"
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({

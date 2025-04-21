@@ -6,8 +6,8 @@ import { Button } from "#components/shadcn/ui/button"
 import { Input } from "#components/shadcn/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
 import { Card, CardContent } from "#components/shadcn/ui/card"
-import { MaterialApi } from "../../../../lib/api"
-import { Material } from "../../../../lib/api/types"
+import { MaterialApi } from "../../../../lib/utils/api"
+import { Material } from "../../../../lib/utils/api/types"
 
 export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("")

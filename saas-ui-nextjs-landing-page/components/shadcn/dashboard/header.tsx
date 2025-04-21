@@ -1,7 +1,7 @@
 "use client"
 
-import { Menu, Bell, LogOut, Settings, Sun, Moon } from "lucide-react"
-import { Button } from "#components/shadcn/ui/button"
+import { Menu, LogOut, Settings } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +9,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "#components/shadcn/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "#components/shadcn/ui/avatar"
-import { useColorMode } from "@chakra-ui/react"
-import { useState, useEffect } from "react"
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
+import { ThemeToggle } from "@/components/theme-toggle"
+import Link from "next/link"
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -28,14 +29,6 @@ interface HeaderProps {
 }
 
 export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: HeaderProps) {
-  const { colorMode, toggleColorMode } = useColorMode()
-  const [mounted, setMounted] = useState(false)
-
-  // To avoid hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
       <div className="flex items-center gap-2 md:hidden">
@@ -52,15 +45,8 @@ export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: Hea
       </div>
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary"></span>
-          <span className="sr-only">Notifications</span>
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={toggleColorMode} aria-label="Toggle color mode">
-          {mounted ? (colorMode === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />) : null}
-        </Button>
+        <ThemeToggle />
+        <NotificationCenter />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -79,9 +65,11 @@ export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: Hea
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem>
               <LogOut className="mr-2 h-4 w-4" />

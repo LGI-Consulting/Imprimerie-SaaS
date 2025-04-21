@@ -6,8 +6,8 @@ import { Button } from "#components/shadcn/ui/button"
 import { Input } from "#components/shadcn/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
 import { Card, CardContent } from "#components/shadcn/ui/card"
-import { ClientApi, OrderApi } from "../../../../lib/api"
-import { Client, Order } from "../../../../lib/api/types"
+import { ClientApi, OrderApi } from "../../../../lib/utils/api"
+import { Client, Order } from "../../../../lib/utils/api/types"
 
 export default function ClientsPage() {
   const [searchQuery, setSearchQuery] = useState("")
