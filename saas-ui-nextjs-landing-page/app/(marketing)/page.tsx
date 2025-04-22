@@ -48,13 +48,13 @@ import {
 
 import * as React from 'react'
 
-import { ButtonLink } from '#components/button-link/button-link'
-import { Features } from '#components/features'
-import { BackgroundGradient } from '#components/gradients/background-gradient'
-import { Hero } from '#components/hero'
-import { Highlights, HighlightsItem } from '#components/highlights'
-import { FallInPlace } from '#components/motion/fall-in-place'
-import { Em } from '#components/typography'
+import { ButtonLink } from '@/components/button-link/button-link'
+import { Features } from '@/components/features'
+import { BackgroundGradient } from '@/components/gradients/background-gradient'
+import { Hero } from '@/components/hero'
+import { Highlights, HighlightsItem } from '@/components/highlights'
+import { FallInPlace } from '@/components/motion/fall-in-place'
+import { Em } from '@/components/typography'
 
 export const meta: Metadata = {
   title: 'LGI Printing Management System',

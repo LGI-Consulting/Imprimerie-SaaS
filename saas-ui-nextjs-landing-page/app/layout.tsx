@@ -1,7 +1,7 @@
 import type React from "react"
 import { Inter } from "next/font/google"
 import { ColorModeScript, theme } from '@chakra-ui/react'
-import { ThemeProvider } from "#components/shadcn/theme-provider"
+import { ThemeProvider } from "@/components/theme-provider"
 import { Provider } from './provider'
 import "./globals.css"
 

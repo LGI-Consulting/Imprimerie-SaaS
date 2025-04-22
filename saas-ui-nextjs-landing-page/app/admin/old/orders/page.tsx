@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { Search, Filter, Plus, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react"
-import { Button } from "#components/shadcn/ui/button"
-import { Input } from "#components/shadcn/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "#components/shadcn/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
-import { Badge } from "#components/shadcn/ui/badge"
-import { Card, CardContent } from "#components/shadcn/ui/card"
+import { Button } from "#components/ui/button"
+import { Input } from "#components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "#components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/ui/table"
+import { Badge } from "#components/ui/badge"
+import { Card, CardContent } from "#components/ui/card"
 import { OrderApi, ClientApi } from "../../../../lib/api"
 import { Order, Client } from "../../../../lib/api/types"
 

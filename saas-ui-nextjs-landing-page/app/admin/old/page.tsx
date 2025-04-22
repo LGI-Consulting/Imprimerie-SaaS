@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/shadcn/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card"
 import { Activity, DollarSign, Users, Package } from "lucide-react"
 import { useEffect, useState } from "react"
 import { OrderApi, ClientApi, PaymentApi, MaterialApi } from "../../../lib/api"

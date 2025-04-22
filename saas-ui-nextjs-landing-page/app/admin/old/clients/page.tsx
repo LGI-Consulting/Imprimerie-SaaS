@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { Search, Plus, Eye, Edit } from "lucide-react"
-import { Button } from "#components/shadcn/ui/button"
-import { Input } from "#components/shadcn/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/shadcn/ui/table"
-import { Card, CardContent } from "#components/shadcn/ui/card"
+import { Button } from "#components/ui/button"
+import { Input } from "#components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "#components/ui/table"
+import { Card, CardContent } from "#components/ui/card"
 import { ClientApi, OrderApi } from "../../../../lib/api"
 import { Client, Order } from "../../../../lib/api/types"
 

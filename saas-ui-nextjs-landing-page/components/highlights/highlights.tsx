@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react'
 import { transparentize } from '@chakra-ui/theme-tools'
 
-import { Section, SectionProps } from '#components/section'
+import { Section, SectionProps } from '@/components/section'
 export interface HighlightBoxProps
   extends GridItemProps,
     Omit<CardProps, 'title'> {}

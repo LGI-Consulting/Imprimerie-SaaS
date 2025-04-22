@@ -3,9 +3,9 @@
 import type React from "react"
 
 import { useState } from "react"
-import { DashboardSidebar } from "#components/shadcn/dashboard/sidebar"
-import { DashboardHeader } from "#components/shadcn/dashboard/header"
-import { UnauthorizedAlert } from "#components/shadcn/dashboard/unauthorized-alert"
+import { DashboardSidebar } from "@/components/dashboard/sidebar"
+import { DashboardHeader } from "@/components/dashboard/header"
+import { UnauthorizedAlert } from "@/components/dashboard/unauthorized-alert"
 
 export default function DashboardLayout({
   children,
