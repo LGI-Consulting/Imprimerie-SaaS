@@ -1,4 +1,3 @@
-import { Url } from "next/dist/shared/lib/router/router";
 
 // api/types.ts
 export interface Employee {
