@@ -15,7 +15,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils/utils"
+import { cn } from "@/lib/utils"
 import Link from "next/link"
 
 // Sample notification data

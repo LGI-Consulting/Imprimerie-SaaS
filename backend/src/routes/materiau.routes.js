@@ -11,14 +11,12 @@ import {
 import {
   verifyToken,
   checkRole,
-  checkTenantAccess,
 } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
 // Appliquer l'authentification à toutes les routes
 router.use(verifyToken);
-router.use(checkTenantAccess);
 
 // Routes de consultation des matériaux
 router.get("/", checkRole(["accueil", "admin", "graphiste"]), getAllMateriau);

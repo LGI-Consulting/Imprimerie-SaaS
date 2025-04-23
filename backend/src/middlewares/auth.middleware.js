@@ -46,8 +46,6 @@ const checkRole = (roles) => {
       });
     }
 
-    if (req.user.type === 'sadmin') return next();
-
     if (roles.includes(req.user.role)) {
       next();
     } else {
@@ -59,18 +57,8 @@ const checkRole = (roles) => {
   };
 };
 
-const checksadmin = (req, res, next) => {
-  if (!req.user || req.user.type !== 'sadmin') {
-    return res.status(403).json({
-      success: false,
-      message: "Accès réservé aux super administrateurs",
-    });
-  }
-  next();
-};
-
-const checkTenantAdmin = (req, res, next) => {
-  if (!req.user || (req.user.type !== 'sadmin' && req.user.role !== 'admin')) {
+const checkAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
       message: "Accès réservé aux administrateurs",
@@ -79,31 +67,8 @@ const checkTenantAdmin = (req, res, next) => {
   next();
 };
 
-const checkTenantAccess = (req, res, next) => {
-  if (!req.user) {
-    return res.status(403).json({
-      success: false,
-      message: "Utilisateur non authentifié",
-    });
-  }
-
-  if (req.user.type === 'sadmin') return next();
-
-  const requestTenantId = req.params.tenant_id || req.body.tenant_id;
-  if (requestTenantId && parseInt(requestTenantId) !== req.user.tenantId) {
-    return res.status(403).json({
-      success: false,
-      message: "Vous n'avez pas accès à cette entreprise",
-    });
-  }
-
-  next();
-};
-
 export {
   verifyToken,
   checkRole,
-  checksadmin,
-  checkTenantAdmin,
-  checkTenantAccess
+  checkAdmin,
 };

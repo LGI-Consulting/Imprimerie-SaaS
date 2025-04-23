@@ -1,12 +1,10 @@
 import pool from "../config/db.js";
 
 /**
- * Get all materials for a specific tenant
+ * Get all materials
  */
 export const getAllMateriau = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
-    
     const query = `
       SELECT m.*, 
         COALESCE(json_agg(json_build_object(
@@ -18,12 +16,11 @@ export const getAllMateriau = async (req, res) => {
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1
       GROUP BY m.materiau_id
       ORDER BY m.type_materiau, m.nom
     `;
     
-    const result = await pool.query(query, [tenantId]);
+    const result = await pool.query(query);
     
     res.status(200).json({
       success: true,
@@ -31,7 +28,7 @@ export const getAllMateriau = async (req, res) => {
       data: result.rows
     });
   } catch (error) {
-    console.error("Error getting materials:", error);
+    console.error("Error getting material:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la récupération des matériaux",
@@ -45,7 +42,6 @@ export const getAllMateriau = async (req, res) => {
  */
 export const getMateriauBySearch = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
     const { term } = req.query;
     
     if (!term) {
@@ -68,15 +64,14 @@ export const getMateriauBySearch = async (req, res) => {
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 AND 
-            (m.type_materiau ILIKE $2 OR 
-             m.nom ILIKE $2 OR 
-             m.description ILIKE $2)
+      WHERE m.type_materiau ILIKE $1 OR 
+            m.nom ILIKE $1 OR 
+            m.description ILIKE $1
       GROUP BY m.materiau_id
       ORDER BY m.type_materiau, m.nom
     `;
     
-    const result = await pool.query(query, [tenantId, searchTerm]);
+    const result = await pool.query(query, [searchTerm]);
     
     res.status(200).json({
       success: true,
@@ -98,7 +93,6 @@ export const getMateriauBySearch = async (req, res) => {
  */
 export const getMateriauByID = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
     const { id } = req.params;
     
     const query = `
@@ -112,11 +106,11 @@ export const getMateriauByID = async (req, res) => {
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 AND m.materiau_id = $2
+      WHERE m.materiau_id = $1
       GROUP BY m.materiau_id
     `;
     
-    const result = await pool.query(query, [tenantId, id]);
+    const result = await pool.query(query, [id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -144,8 +138,6 @@ export const getMateriauByID = async (req, res) => {
  */
 export const getMateriauStock = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
-    
     const query = `
       SELECT m.materiau_id, m.type_materiau, m.nom, m.description, m.prix_unitaire, m.unite_mesure,
         json_agg(json_build_object(
@@ -158,12 +150,12 @@ export const getMateriauStock = async (req, res) => {
         )) as stocks
       FROM materiaux m
       JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.tenant_id = $1 AND s.quantite_en_stock <= s.seuil_alerte
+      WHERE s.quantite_en_stock <= s.seuil_alerte
       GROUP BY m.materiau_id
       ORDER BY m.type_materiau, m.nom
     `;
     
-    const result = await pool.query(query, [tenantId]);
+    const result = await pool.query(query);
     
     res.status(200).json({
       success: true,
@@ -187,7 +179,6 @@ export const createMateriau = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const tenantId = req.user.tenant_id;
     const { 
       type_materiau, 
       nom, 
@@ -210,7 +201,6 @@ export const createMateriau = async (req, res) => {
     // Create the material
     const insertMateriauQuery = `
       INSERT INTO materiaux (
-        tenant_id, 
         type_materiau, 
         nom, 
         description, 
@@ -218,12 +208,11 @@ export const createMateriau = async (req, res) => {
         unite_mesure, 
         options_disponibles
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) 
+      VALUES ($1, $2, $3, $4, $5, $6) 
       RETURNING *
     `;
     
     const materiauValues = [
-      tenantId, 
       type_materiau, 
       nom || null, 
       description || null, 
@@ -294,7 +283,6 @@ export const updateMateriau = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const tenantId = req.user.tenant_id;
     const { id } = req.params;
     const { 
       type_materiau, 
@@ -309,10 +297,10 @@ export const updateMateriau = async (req, res) => {
     // Check if material exists
     const checkQuery = `
       SELECT * FROM materiaux 
-      WHERE materiau_id = $1 AND tenant_id = $2
+      WHERE materiau_id = $1
     `;
     
-    const checkResult = await client.query(checkQuery, [id, tenantId]);
+    const checkResult = await client.query(checkQuery, [id]);
     
     if (checkResult.rows.length === 0) {
       return res.status(404).json({
@@ -334,7 +322,7 @@ export const updateMateriau = async (req, res) => {
         unite_mesure = COALESCE($5, unite_mesure),
         options_disponibles = COALESCE($6, options_disponibles),
         date_modification = CURRENT_TIMESTAMP
-      WHERE materiau_id = $7 AND tenant_id = $8
+      WHERE materiau_id = $7
       RETURNING *
     `;
     
@@ -345,8 +333,7 @@ export const updateMateriau = async (req, res) => {
       prix_unitaire,
       unite_mesure,
       options_disponibles,
-      id,
-      tenantId
+      id
     ];
     
     const materiauResult = await client.query(updateMateriauQuery, materiauValues);
@@ -413,11 +400,11 @@ export const updateMateriau = async (req, res) => {
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m
       LEFT JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE m.materiau_id = $1 AND m.tenant_id = $2
+      WHERE m.materiau_id = $1
       GROUP BY m.materiau_id
     `;
     
-    const updatedResult = await client.query(getUpdatedQuery, [id, tenantId]);
+    const updatedResult = await client.query(getUpdatedQuery, [id]);
     
     await client.query('COMMIT');
     
@@ -444,16 +431,15 @@ export const updateMateriau = async (req, res) => {
  */
 export const deleteMateriau = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
     const { id } = req.params;
     
     // Check if material exists
     const checkQuery = `
       SELECT * FROM materiaux 
-      WHERE materiau_id = $1 AND tenant_id = $2
+      WHERE materiau_id = $1
     `;
     
-    const checkResult = await pool.query(checkQuery, [id, tenantId]);
+    const checkResult = await pool.query(checkQuery, [id]);
     
     if (checkResult.rows.length === 0) {
       return res.status(404).json({
@@ -480,11 +466,11 @@ export const deleteMateriau = async (req, res) => {
     // Delete the material (cascade will delete related stocks)
     const deleteQuery = `
       DELETE FROM materiaux 
-      WHERE materiau_id = $1 AND tenant_id = $2
+      WHERE materiau_id = $1
       RETURNING *
     `;
     
-    const result = await pool.query(deleteQuery, [id, tenantId]);
+    const result = await pool.query(deleteQuery, [id]);
     
     res.status(200).json({
       success: true,

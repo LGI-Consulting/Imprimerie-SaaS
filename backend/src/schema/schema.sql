@@ -1,32 +1,6 @@
--- Table des tenants (entreprises)
-CREATE TABLE tenants (
-    tenant_id SERIAL PRIMARY KEY,
-    nom VARCHAR(255) NOT NULL,
-    description TEXT,
-    logo_url VARCHAR(255),
-    adresse TEXT,
-    telephone VARCHAR(30),
-    email VARCHAR(100),
-    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    est_actif BOOLEAN DEFAULT TRUE
-);
-
--- Table des super admin système
-CREATE TABLE sadmin (
-    admin_id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,  
-    password VARCHAR(255) NOT NULL,      
-    nom VARCHAR(100) NOT NULL,
-    prenom VARCHAR(100) NOT NULL,
-    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    derniere_connexion TIMESTAMP,
-    statut BOOLEAN DEFAULT TRUE  
-);
-
 -- Table Employés
 CREATE TABLE employes (
     employe_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL,
@@ -35,13 +9,13 @@ CREATE TABLE employes (
     password VARCHAR(255) NOT NULL,
     date_embauche DATE NOT NULL,
     est_actif BOOLEAN DEFAULT TRUE,
-    UNIQUE (email, tenant_id)
+    UNIQUE (email)
 );
+
 
 -- Table Clients
 CREATE TABLE clients (
     client_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
     email VARCHAR(100),
@@ -54,7 +28,6 @@ CREATE TABLE clients (
 -- Table Matériaux
 CREATE TABLE materiaux (
     materiau_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     type_materiau VARCHAR(100) NOT NULL,
     nom VARCHAR(100),
     description TEXT,
@@ -78,20 +51,9 @@ CREATE TABLE stocks_materiaux_largeur (
     UNIQUE (materiau_id, largeur)
 );
 
--- Table Travaux d'Impression
-CREATE TABLE travaux (
-    travail_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    nom VARCHAR(100) NOT NULL,
-    description TEXT,
-    prix_base DECIMAL(10, 2) NOT NULL,
-    temps_estime INTEGER
-);
-
 -- Table Commandes
 CREATE TABLE commandes (
     commande_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     client_id INTEGER REFERENCES clients(client_id),
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     numero_commande VARCHAR(50) UNIQUE,
@@ -120,7 +82,6 @@ CREATE TABLE details_commande (
 -- Table Paiements
 CREATE TABLE paiements (
     paiement_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
     montant DECIMAL(10, 2) NOT NULL,
     methode VARCHAR(20) NOT NULL CHECK (methode IN ('espèces', 'Flooz', 'Mixx')),
@@ -133,7 +94,6 @@ CREATE TABLE paiements (
 -- Table Factures
 CREATE TABLE factures (
     facture_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
     numero_facture VARCHAR(50) NOT NULL,
     date_emission TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -149,7 +109,6 @@ CREATE TABLE factures (
 -- Table Mouvements de Stock mise à jour
 CREATE TABLE mouvements_stock (
     mouvement_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),  -- Changement ici
     type_mouvement VARCHAR(20) NOT NULL CHECK (type_mouvement IN ('entrée', 'sortie', 'ajustement')),
     quantite DECIMAL(10, 2) NOT NULL,
@@ -162,7 +121,6 @@ CREATE TABLE mouvements_stock (
 -- Table Remises
 CREATE TABLE remises (
     remise_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL CHECK (type IN ('pourcentage', 'montant_fixe')),
     valeur DECIMAL(10, 2) NOT NULL,
     date_debut TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -177,9 +135,7 @@ CREATE TABLE remises (
 -- Table Sessions Utilisateurs
 CREATE TABLE sessions_utilisateurs (
     session_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     employe_id INTEGER REFERENCES employes(employe_id),
-    sadmin_id INTEGER REFERENCES sadmin(admin_id),
     token_jwt TEXT NOT NULL,
     date_connexion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_expiration TIMESTAMP NOT NULL,
@@ -190,9 +146,7 @@ CREATE TABLE sessions_utilisateurs (
 -- Table Journal des Activités
 CREATE TABLE journal_activites (
     log_id SERIAL PRIMARY KEY,
-    tenant_id INTEGER REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     employe_id INTEGER REFERENCES employes(employe_id),
-    sadmin_id INTEGER REFERENCES sadmin(admin_id),
     action VARCHAR(100) NOT NULL,
     date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     details TEXT,

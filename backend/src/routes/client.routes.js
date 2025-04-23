@@ -12,14 +12,12 @@ import {
 import { 
   verifyToken, 
   checkRole, 
-  checkTenantAccess 
 } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
 // Appliquer l'authentification à toutes les routes
 router.use(verifyToken);
-router.use(checkTenantAccess);
 
 // Routes clients avec vérification des rôles appropriés
 // Supposons que 'user', 'manager' et 'admin' peuvent voir les clients

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Search, Filter, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { OrderApi, ClientApi } from "@/lib/api"
-import { Order, Client } from "@/lib/api/types"
 import { AddOrderDialog } from "@/components/dashboard/orders/add-order-dialog"
 import { ViewOrderDialog } from "@/components/dashboard/orders/view-order-dialog"
 import { EditOrderDialog } from "@/components/dashboard/orders/edit-order-dialog"
@@ -24,167 +22,175 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-export default function PageCommandes() {
+// Sample data for orders
+const ordersData = [
+  {
+    id: "ORD-001",
+    clientName: "John Smith",
+    clientId: "1",
+    date: "2023-04-15",
+    status: "Completed",
+    dueDate: "2023-04-20",
+    notes: "Priority order for a regular customer",
+    items: [
+      { id: "item1", name: "Cotton Fabric", quantity: 5, price: 5.99 },
+      { id: "item2", name: "Buttons (pack of 100)", quantity: 1, price: 3.99 },
+    ],
+    shippingAddress: "123 Main St, New York, NY 10001",
+    paymentMethod: "Credit Card",
+  },
+  {
+    id: "ORD-002",
+    clientName: "Sarah Johnson",
+    clientId: "2",
+    date: "2023-04-16",
+    status: "Processing",
+    dueDate: "2023-04-25",
+    items: [
+      { id: "item3", name: "Denim", quantity: 3, price: 8.75 },
+      { id: "item4", name: "Polyester Blend", quantity: 2, price: 4.5 },
+    ],
+  },
+  {
+    id: "ORD-003",
+    clientName: "Michael Brown",
+    clientId: "3",
+    date: "2023-04-17",
+    status: "Pending",
+    dueDate: "2023-04-30",
+    notes: "Customer requested express shipping",
+  },
+  {
+    id: "ORD-004",
+    clientName: "Emily Davis",
+    clientId: "4",
+    date: "2023-04-18",
+    status: "Completed",
+    dueDate: "2023-04-22",
+  },
+  {
+    id: "ORD-005",
+    clientName: "David Wilson",
+    clientId: "5",
+    date: "2023-04-19",
+    status: "Cancelled",
+    dueDate: "2023-04-24",
+    notes: "Customer cancelled due to delay",
+  },
+  {
+    id: "ORD-006",
+    clientName: "Lisa Martinez",
+    clientId: "6",
+    date: "2023-04-20",
+    status: "Processing",
+    dueDate: "2023-04-28",
+  },
+  {
+    id: "ORD-007",
+    clientName: "Robert Taylor",
+    clientId: "7",
+    date: "2023-04-21",
+    status: "Pending",
+    dueDate: "2023-05-01",
+  },
+  {
+    id: "ORD-008",
+    clientName: "Jennifer Anderson",
+    clientId: "8",
+    date: "2023-04-22",
+    status: "Completed",
+    dueDate: "2023-04-27",
+  },
+]
+
+export default function OrdersPage() {
+  const [orders, setOrders] = useState(ordersData)
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("tous")
-  const [orders, setOrders] = useState<Order[]>([])
-  const [clients, setClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState("all")
   const [isAddOrderOpen, setIsAddOrderOpen] = useState(false)
   const [isViewOrderOpen, setIsViewOrderOpen] = useState(false)
   const [isEditOrderOpen, setIsEditOrderOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  
-  const itemsPerPage = 10
+  const [selectedOrder, setSelectedOrder] = useState<(typeof ordersData)[0] | null>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [ordersData, clientsData] = await Promise.all([
-          OrderApi.getAll(),
-          ClientApi.getAll()
-        ])
-        setOrders(ordersData)
-        setClients(clientsData)
-      } catch (error) {
-        console.error("Échec de la récupération des données:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
-  // Obtenir le nom du client par ID
-  const getClientName = (clientId: number | null) => {
-    if (!clientId) return "Client inconnu"
-    const client = clients.find(c => c.client_id === clientId)
-    return client ? `${client.prenom} ${client.nom}` : "Client inconnu"
-  }
-
-  // Filtrer les commandes
+  // Filter orders based on search query and status filter
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
-      order.numero_commande?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getClientName(order.client_id).toLowerCase().includes(searchQuery.toLowerCase())
+      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.clientName.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesStatus = 
-      statusFilter === "tous" || 
-      order.statut.toLowerCase() === statusFilter.toLowerCase()
+    const matchesStatus = statusFilter === "all" || order.status.toLowerCase() === statusFilter.toLowerCase()
 
     return matchesSearch && matchesStatus
   })
 
-  // Pagination
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
-  const paginatedOrders = filteredOrders.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-
-  // Couleurs des badges de statut
+  // Status badge color mapping
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "terminée":
-      case "livrée":
+      case "completed":
         return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "en_impression":
+      case "processing":
         return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "reçue":
-      case "payée":
+      case "pending":
         return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
+      case "cancelled":
+        return "bg-red-100 text-red-800 hover:bg-red-100"
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-100"
     }
   }
 
-  // Formater le statut pour l'affichage
-  const formatStatus = (status: string) => {
-    switch (status) {
-      case "reçue": return "Reçue"
-      case "payée": return "Payée"
-      case "en_impression": return "En cours"
-      case "terminée": return "Terminée"
-      case "livrée": return "Livrée"
-      default: return status
-    }
-  }
-
-  // Gérer la visualisation d'une commande
-  const handleViewOrder = (order: Order) => {
+  // Handle view order
+  const handleViewOrder = (order: (typeof ordersData)[0]) => {
     setSelectedOrder(order)
     setIsViewOrderOpen(true)
   }
 
-  // Gérer l'édition d'une commande
-  const handleEditOrder = (order: Order) => {
+  // Handle edit order
+  const handleEditOrder = (order: (typeof ordersData)[0]) => {
     setSelectedOrder(order)
     setIsEditOrderOpen(true)
   }
 
-  // Gérer la suppression d'une commande
-  const handleDeleteClick = (order: Order) => {
+  // Handle delete order
+  const handleDeleteClick = (order: (typeof ordersData)[0]) => {
     setSelectedOrder(order)
     setIsDeleteDialogOpen(true)
   }
 
-  // Confirmer la suppression
-  const confirmDelete = async () => {
+  // Confirm delete order
+  const confirmDelete = () => {
     if (selectedOrder) {
-      try {
-        await OrderApi.delete(selectedOrder.commande_id)
-        setOrders(orders.filter(order => order.commande_id !== selectedOrder.commande_id))
-      } catch (error) {
-        console.error("Échec de la suppression de la commande:", error)
-      } finally {
-        setIsDeleteDialogOpen(false)
-      }
+      setOrders(orders.filter((order) => order.id !== selectedOrder.id))
+      setIsDeleteDialogOpen(false)
     }
   }
 
-  // Gérer l'ajout d'une commande
-  const handleAddOrder = async (newOrder: Omit<Order, "commande_id">) => {
-    try {
-      const createdOrder = await OrderApi.create(newOrder)
-      setOrders([...orders, createdOrder])
-    } catch (error) {
-      console.error("Échec de l'ajout de la commande:", error)
-    }
+  // Handle add order
+  const handleAddOrder = (newOrder: Omit<(typeof ordersData)[0], "id">) => {
+    // Generate a new order ID
+    const orderIds = orders.map((order) => Number.parseInt(order.id.replace("ORD-", "")))
+    const maxId = Math.max(...orderIds)
+    const newId = `ORD-${(maxId + 1).toString().padStart(3, "0")}`
+
+    setOrders([...orders, { ...newOrder, id: newId }])
   }
 
-  // Gérer la mise à jour d'une commande
-  const handleUpdateOrder = async (updatedOrder: Order) => {
-    try {
-      await OrderApi.update(updatedOrder.commande_id, updatedOrder)
-      setOrders(orders.map(order => 
-        order.commande_id === updatedOrder.commande_id ? updatedOrder : order
-      ))
-    } catch (error) {
-      console.error("Échec de la mise à jour de la commande:", error)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    )
+  // Handle update order
+  const handleUpdateOrder = (updatedOrder: (typeof ordersData)[0]) => {
+    setOrders(orders.map((order) => (order.id === updatedOrder.id ? updatedOrder : order)))
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Commandes</h2>
-          <p className="text-muted-foreground">Gérez et visualisez toutes les commandes clients</p>
+          <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
+          <p className="text-muted-foreground">Manage and view all client orders</p>
         </div>
         <Button className="sm:w-auto w-full" onClick={() => setIsAddOrderOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Nouvelle commande
+          New Order
         </Button>
       </div>
 
@@ -195,7 +201,7 @@ export default function PageCommandes() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Rechercher des commandes..."
+                placeholder="Search orders..."
                 className="pl-8 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -205,15 +211,14 @@ export default function PageCommandes() {
               <Filter className="h-4 w-4 text-muted-foreground" />
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filtrer par statut" />
+                  <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tous">Tous les statuts</SelectItem>
-                  <SelectItem value="reçue">Reçue</SelectItem>
-                  <SelectItem value="payée">Payée</SelectItem>
-                  <SelectItem value="en_impression">En cours</SelectItem>
-                  <SelectItem value="terminée">Terminée</SelectItem>
-                  <SelectItem value="livrée">Livrée</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -223,59 +228,37 @@ export default function PageCommandes() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Numéro de commande</TableHead>
-                  <TableHead>Client</TableHead>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Client Name</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Priorité</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedOrders.length > 0 ? (
-                  paginatedOrders.map((order) => (
-                    <TableRow key={order.commande_id}>
-                      <TableCell className="font-medium">{order.numero_commande}</TableCell>
-                      <TableCell>{getClientName(order.client_id)}</TableCell>
-                      <TableCell>{new Date(order.date_creation).toLocaleDateString()}</TableCell>
+                {filteredOrders.length > 0 ? (
+                  filteredOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">{order.id}</TableCell>
+                      <TableCell>{order.clientName}</TableCell>
+                      <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusColor(order.statut)}>
-                          {formatStatus(order.statut)}
+                        <Badge variant="outline" className={getStatusColor(order.status)}>
+                          {order.status}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {order.priorite > 0 ? (
-                          <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-100">
-                            Haute
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-                            Normale
-                          </Badge>
-                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Voir la commande" 
-                            onClick={() => handleViewOrder(order)}
-                          >
+                          <Button variant="ghost" size="icon" title="View Order" onClick={() => handleViewOrder(order)}>
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            title="Modifier la commande" 
-                            onClick={() => handleEditOrder(order)}
-                          >
+                          <Button variant="ghost" size="icon" title="Edit Order" onClick={() => handleEditOrder(order)}>
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Supprimer la commande"
+                            title="Delete Order"
                             onClick={() => handleDeleteClick(order)}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
@@ -286,8 +269,8 @@ export default function PageCommandes() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      Aucune commande trouvée.
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      No orders found.
                     </TableCell>
                   </TableRow>
                 )}
@@ -296,74 +279,51 @@ export default function PageCommandes() {
           </div>
 
           <div className="flex items-center justify-end space-x-2 py-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
+            <Button variant="outline" size="sm" disabled>
               <ChevronLeft className="h-4 w-4" />
-              Précédent
+              Previous
             </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} sur {totalPages}
-            </span>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-            >
-              Suivant
+            <Button variant="outline" size="sm">
+              Next
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Dialogue d'ajout de commande */}
-      <AddOrderDialog 
-        open={isAddOrderOpen} 
-        onOpenChange={setIsAddOrderOpen} 
-        onAddOrder={handleAddOrder}
-        clients={clients}
-      />
+      {/* Add Order Dialog */}
+      <AddOrderDialog open={isAddOrderOpen} onOpenChange={setIsAddOrderOpen} onAddOrder={handleAddOrder} />
 
-      {/* Dialogue de visualisation de commande */}
+      {/* View Order Dialog */}
       {selectedOrder && (
-        <ViewOrderDialog 
-          open={isViewOrderOpen} 
-          onOpenChange={setIsViewOrderOpen} 
-          order={selectedOrder}
-          clientName={getClientName(selectedOrder.client_id)}
-        />
+        <ViewOrderDialog open={isViewOrderOpen} onOpenChange={setIsViewOrderOpen} order={selectedOrder} />
       )}
 
-      {/* Dialogue d'édition de commande */}
+      {/* Edit Order Dialog */}
       {selectedOrder && (
         <EditOrderDialog
           open={isEditOrderOpen}
           onOpenChange={setIsEditOrderOpen}
           order={selectedOrder}
           onUpdateOrder={handleUpdateOrder}
-          clients={clients}
         />
       )}
 
-      {/* Dialogue de confirmation de suppression */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. La commande
-              {selectedOrder && <span className="font-medium"> {selectedOrder.numero_commande}</span>} sera définitivement supprimée du système.
+              This action cannot be undone. This will permanently delete the order
+              {selectedOrder && <span className="font-medium"> {selectedOrder.id}</span>} and remove its data from the
+              system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
-              Supprimer
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

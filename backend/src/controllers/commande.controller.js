@@ -4,21 +4,19 @@ import pool from "../config/db.js";
 export const getAllOrders = async (req, res) => {
   try {
     const { startDate, endDate, sortBy, sortOrder } = req.query;
-    const tenantId = req.user.tenant_id;
     
     let query = `
       SELECT c.*, cl.nom as client_nom, cl.prenom as client_prenom, cl.telephone, cl.email
       FROM commandes c
       LEFT JOIN clients cl ON c.client_id = cl.client_id
-      WHERE c.tenant_id = $1
     `;
     
-    const queryParams = [tenantId];
-    let paramCounter = 2;
+    const queryParams = [];
+    let paramCounter = 1;
     
     // Filtrage par date si spécifié
     if (startDate && endDate) {
-      query += ` AND c.date_creation BETWEEN $${paramCounter} AND $${paramCounter + 1}`;
+      query += ` WHERE c.date_creation BETWEEN $${paramCounter} AND $${paramCounter + 1}`;
       queryParams.push(new Date(startDate), new Date(endDate));
       paramCounter += 2;
     }
@@ -41,7 +39,6 @@ export const getAllOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
     try {
       const orderId = req.params.id;
-      const tenantId = req.user.tenant_id;
   
       const query = `
         SELECT c.*, 
@@ -54,10 +51,10 @@ export const getOrderById = async (req, res) => {
         LEFT JOIN employes e ON c.employe_graphiste_id = e.employe_id
         LEFT JOIN details_commande dc ON c.commande_id = dc.commande_id
         LEFT JOIN materiaux m ON dc.materiau_id = m.materiau_id
-        WHERE c.commande_id = $1 AND c.tenant_id = $2
+        WHERE c.commande_id = $1
       `;
   
-      const { rows } = await pool.query(query, [orderId, tenantId]);
+      const { rows } = await pool.query(query, [orderId]);
   
       if (rows.length === 0) {
         return res.status(404).json({ message: "Commande non trouvée" });
@@ -124,17 +121,16 @@ export const getOrderById = async (req, res) => {
 export const getOrdersByClient = async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    const tenantId = req.user.tenant_id;
     
     const query = `
       SELECT c.*, cl.nom as client_nom, cl.prenom as client_prenom, cl.telephone, cl.email
       FROM commandes c
       JOIN clients cl ON c.client_id = cl.client_id
-      WHERE c.client_id = $1 AND c.tenant_id = $2
+      WHERE c.client_id = $1
       ORDER BY c.date_creation DESC
     `;
     
-    const { rows } = await pool.query(query, [clientId, tenantId]);
+    const { rows } = await pool.query(query, [clientId]);
     res.status(200).json(rows);
   } catch (error) {
     res.status(500).json({ message: "Erreur lors de la récupération des commandes du client", error: error.message });
@@ -145,17 +141,16 @@ export const getOrdersByClient = async (req, res) => {
 export const getOrdersByStatus = async (req, res) => {
   try {
     const status = req.params.status;
-    const tenantId = req.user.tenant_id;
     
     const query = `
       SELECT c.*, cl.nom as client_nom, cl.prenom as client_prenom, cl.telephone, cl.email
       FROM commandes c
       JOIN clients cl ON c.client_id = cl.client_id
-      WHERE c.statut = $1 AND c.tenant_id = $2
+      WHERE c.statut = $1
       ORDER BY c.date_creation DESC
     `;
     
-    const { rows } = await pool.query(query, [status, tenantId]);
+    const { rows } = await pool.query(query, [status]);
     res.status(200).json(rows);
   } catch (error) {
     res.status(500).json({ message: "Erreur lors de la récupération des commandes par statut", error: error.message });
@@ -166,7 +161,6 @@ export const getOrdersByStatus = async (req, res) => {
 export const getOrdersByMaterial = async (req, res) => {
   try {
     const materialType = req.params.materialType;
-    const tenantId = req.user.tenant_id;
     
     const query = `
       SELECT c.*, cl.nom as client_nom, cl.prenom as client_prenom, cl.telephone, cl.email
@@ -174,11 +168,11 @@ export const getOrdersByMaterial = async (req, res) => {
       JOIN clients cl ON c.client_id = cl.client_id
       JOIN details_commande dc ON c.commande_id = dc.commande_id
       JOIN materiaux m ON dc.materiau_id = m.materiau_id
-      WHERE m.nom = $1 AND c.tenant_id = $2
+      WHERE m.nom = $1
       ORDER BY c.date_creation DESC
     `;
     
-    const { rows } = await pool.query(query, [materialType, tenantId]);
+    const { rows } = await pool.query(query, [materialType]);
     res.status(200).json(rows);
   } catch (error) {
     res.status(500).json({ message: "Erreur lors de la récupération des commandes par matériel", error: error.message });
@@ -201,7 +195,6 @@ export const createOrder = async (req, res) => {
       options
     } = req.body;
 
-    const tenantId = req.user.tenant_id;
     const employeId = req.user.employe_id;
 
     // Gérer les informations client
@@ -215,13 +208,12 @@ export const createOrder = async (req, res) => {
       );
     } else {
       const insertClientQuery = `
-        INSERT INTO clients (tenant_id, nom, prenom, email, telephone, adresse, date_creation, derniere_visite)
-        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO clients (nom, prenom, email, telephone, adresse, date_creation, derniere_visite)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING client_id
       `;
 
       const clientResult = await client.query(insertClientQuery, [
-        tenantId,
         clientInfo.nom,
         clientInfo.prenom,
         clientInfo.email || null,
@@ -249,11 +241,11 @@ export const createOrder = async (req, res) => {
     const materialInfoQuery = `
       SELECT m.materiau_id, m.type_materiau, m.prix_unitaire, m.options_disponibles
       FROM materiaux m
-      WHERE m.tenant_id = $1 AND m.type_materiau = $2
+      WHERE m.type_materiau = $1
       LIMIT 1
     `;
 
-    const materialInfoResult = await client.query(materialInfoQuery, [tenantId, materialType]);
+    const materialInfoResult = await client.query(materialInfoQuery, [materialType]);
 
     if (materialInfoResult.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -353,16 +345,15 @@ export const createOrder = async (req, res) => {
 
     const createOrderQuery = `
       INSERT INTO commandes (
-        tenant_id, client_id, date_creation, statut, priorite, 
+        client_id, date_creation, statut, priorite, 
         commentaires, employe_reception_id, est_commande_speciale,
         numero_commande
       )
-      VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING commande_id
     `;
 
     const orderResult = await client.query(createOrderQuery, [
-      tenantId,
       clientId,
       "reçue",
       1,
@@ -437,13 +428,12 @@ export const createOrder = async (req, res) => {
     // Enregistrer le mouvement de stock
     const stockMouvementQuery = `
       INSERT INTO mouvements_stock (
-        tenant_id, stock_id, type_mouvement, quantite, commande_id, employe_id, commentaire
+        stock_id, type_mouvement, quantite, commande_id, employe_id, commentaire
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6)
     `;
 
     await client.query(stockMouvementQuery, [
-      tenantId,
       selectedStock.stock_id,
       'sortie',
       materialLengthUsed,
@@ -504,15 +494,14 @@ export const updateOrder = async (req, res) => {
     const orderId = req.params.id;
     const updateData = req.body;
     const employeId = req.user.employe_id;
-    const tenantId = req.tenant.tenant_id;
     
     // Vérifier si la commande existe
     const checkOrderQuery = `
       SELECT * FROM commandes 
-      WHERE commande_id = $1 AND tenant_id = $2
+      WHERE commande_id = $1
     `;
     
-    const orderCheck = await client.query(checkOrderQuery, [orderId, tenantId]);
+    const orderCheck = await client.query(checkOrderQuery, [orderId]);
     
     if (orderCheck.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -537,7 +526,6 @@ export const updateOrder = async (req, res) => {
     for (const [key, value] of Object.entries(updateData)) {
       if (
         key !== 'commande_id' && 
-        key !== 'tenant_id' && 
         key !== 'date_creation' &&
         key in currentOrder
       ) {
@@ -557,15 +545,14 @@ export const updateOrder = async (req, res) => {
     updateValues.push(employeId);
     paramCounter++;
     
-    // Ajouter tenant_id et commande_id à la fin des valeurs
-    updateValues.push(tenantId);
+    // Ajouter commande_id à la fin des valeurs
     updateValues.push(orderId);
     
     // Construire la requête de mise à jour
     const updateOrderQuery = `
       UPDATE commandes
       SET ${updateFields.join(', ')}
-      WHERE tenant_id = $${paramCounter} AND commande_id = $${paramCounter + 1}
+      WHERE commande_id = $${paramCounter}
       RETURNING *
     `;
     
@@ -574,14 +561,13 @@ export const updateOrder = async (req, res) => {
     // Journaliser l'action
     const logQuery = `
       INSERT INTO journal_activites (
-        tenant_id, employe_id, action, date_action, 
+        employe_id, action, date_action, 
         details, entite_affectee, entite_id
       )
-      VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6)
     `;
     
     await client.query(logQuery, [
-      tenantId,
       employeId,
       'MODIFICATION',
       'Mise à jour d\'une commande',
@@ -599,10 +585,10 @@ export const updateOrder = async (req, res) => {
       FROM commandes c
       JOIN clients cl ON c.client_id = cl.client_id
       LEFT JOIN employes e ON c.employe_graphiste_id = e.employe_id
-      WHERE c.commande_id = $1 AND c.tenant_id = $2
+      WHERE c.commande_id = $1
     `;
     
-    const { rows } = await pool.query(getUpdatedOrderQuery, [orderId, tenantId]);
+    const { rows } = await pool.query(getUpdatedOrderQuery, [orderId]);
     
     const updatedOrder = {
       ...rows[0],
@@ -647,15 +633,14 @@ export const deleteOrder = async (req, res) => {
     
     const orderId = req.params.id;
     const employeId = req.user.employe_id;
-    const tenantId = req.tenant.tenant_id;
     
     // Vérifier si la commande existe
     const checkOrderQuery = `
       SELECT * FROM commandes 
-      WHERE commande_id = $1 AND tenant_id = $2
+      WHERE commande_id = $1
     `;
     
-    const orderCheck = await client.query(checkOrderQuery, [orderId, tenantId]);
+    const orderCheck = await client.query(checkOrderQuery, [orderId]);
     
     if (orderCheck.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -687,22 +672,21 @@ export const deleteOrder = async (req, res) => {
       const updateStockQuery = `
         UPDATE materiaux
         SET quantite_en_stock = quantite_en_stock + $1
-        WHERE materiau_id = $2 AND tenant_id = $3
+        WHERE materiau_id = $2
       `;
       
-      await client.query(updateStockQuery, [detail.quantite, detail.materiau_id, tenantId]);
+      await client.query(updateStockQuery, [detail.quantite, detail.materiau_id]);
       
       // Enregistrer le mouvement de stock
       const createStockMovementQuery = `
         INSERT INTO mouvements_stock (
-          tenant_id, materiau_id, type_mouvement, quantite, 
+          materiau_id, type_mouvement, quantite, 
           date_mouvement, commande_id, employe_id, commentaire
         )
-        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6, $7)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5, $6)
       `;
       
       await client.query(createStockMovementQuery, [
-        tenantId,
         detail.materiau_id,
         'entrée',
         detail.quantite,
@@ -731,22 +715,21 @@ export const deleteOrder = async (req, res) => {
     // Supprimer la commande
     const deleteOrderQuery = `
       DELETE FROM commandes
-      WHERE commande_id = $1 AND tenant_id = $2
+      WHERE commande_id = $1
     `;
     
-    await client.query(deleteOrderQuery, [orderId, tenantId]);
+    await client.query(deleteOrderQuery, [orderId]);
     
     // Journaliser l'action
     const logQuery = `
       INSERT INTO journal_activites (
-        tenant_id, employe_id, action, date_action, 
+        employe_id, action, date_action, 
         details, entite_affectee, entite_id
       )
-      VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6)
     `;
     
     await client.query(logQuery, [
-      tenantId,
       employeId,
       'SUPPRESSION',
       'Suppression d\'une commande',
