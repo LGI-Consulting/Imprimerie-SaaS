@@ -3,15 +3,13 @@ CREATE TABLE employes (
     employe_id SERIAL PRIMARY KEY,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
     telephone VARCHAR(20) NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'accueil', 'caisse', 'graphiste')),
     password VARCHAR(255) NOT NULL,
     date_embauche DATE NOT NULL,
-    est_actif BOOLEAN DEFAULT TRUE,
-    UNIQUE (email)
+    est_actif BOOLEAN DEFAULT TRUE
 );
-
 
 -- Table Clients
 CREATE TABLE clients (
@@ -38,7 +36,7 @@ CREATE TABLE materiaux (
     date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
---  Table Stocks par largeur (nouvelle)
+-- Table Stocks par largeur
 CREATE TABLE stocks_materiaux_largeur (
     stock_id SERIAL PRIMARY KEY,
     materiau_id INTEGER NOT NULL REFERENCES materiaux(materiau_id) ON DELETE CASCADE,
@@ -64,6 +62,20 @@ CREATE TABLE commandes (
     employe_caisse_id INTEGER REFERENCES employes(employe_id),
     employe_graphiste_id INTEGER REFERENCES employes(employe_id),
     est_commande_speciale BOOLEAN DEFAULT FALSE
+);
+
+-- Table Fichiers d'impression liés aux commandes
+CREATE TABLE print_files (
+    print_file_id SERIAL PRIMARY KEY,
+    commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    mime_type VARCHAR(100),
+    description TEXT,
+    uploaded_by INTEGER REFERENCES employes(employe_id),
+    date_upload TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (commande_id, file_name)
 );
 
 -- Table Détails de Commande
@@ -103,13 +115,13 @@ CREATE TABLE factures (
     montant_final DECIMAL(10, 2) NOT NULL,
     chemin_pdf VARCHAR(255),
     date_paiement TIMESTAMP,
-    UNIQUE (numero_facture, tenant_id)
+    UNIQUE (numero_facture, commande_id)
 );
 
--- Table Mouvements de Stock mise à jour
+-- Table Mouvements de Stock
 CREATE TABLE mouvements_stock (
     mouvement_id SERIAL PRIMARY KEY,
-    stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),  -- Changement ici
+    stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),
     type_mouvement VARCHAR(20) NOT NULL CHECK (type_mouvement IN ('entrée', 'sortie', 'ajustement')),
     quantite DECIMAL(10, 2) NOT NULL,
     date_mouvement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -130,7 +142,6 @@ CREATE TABLE remises (
     code_remise VARCHAR(50),
     est_active BOOLEAN DEFAULT TRUE
 );
-
 
 -- Table Sessions Utilisateurs
 CREATE TABLE sessions_utilisateurs (
