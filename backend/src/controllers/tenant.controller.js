@@ -28,15 +28,6 @@ async function getAllTenants(req, res) {
     const tenantsResult = await pool.query(query, queryParams);
     const countResult = await pool.query(countQuery, queryParams.slice(0, search ? 1 : 0));
 
-    // Journal d'activité
-    await pool.query(
-      "INSERT INTO journal_activites (sadmin_id, action, details) VALUES ($1, $2, $3)",
-      [
-        req.user.id,
-        "liste_tenants",
-        `Consultation de la liste des tenants (page ${page})`
-      ]
-    );
 
     console.log("tenant fait")
 

@@ -1,15 +1,15 @@
 import type React from "react"
 import { Inter } from "next/font/google"
-import { Toaster } from "@/components/ui/toaster"
+import { ColorModeScript, theme } from '@chakra-ui/react'
 import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/components/auth/auth-provider"
+import { Provider } from './provider'
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Print Shop Lotus",
-  description: "Un systeme de gestion pour les ateliers d'impression",
+  title: "Multi-Tenant Dashboard",
+  description: "A responsive dashboard for multi-tenant applications",
 }
 
 export default function RootLayout({
@@ -17,22 +17,20 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const colorMode = theme.config.initialColorMode
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html 
+      lang="en" 
+    >
       <head>
-      <link rel="icon" href="/LGI-logo.ico" />
+      <ColorModeScript initialColorMode={colorMode} />
       </head>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
+      <body>
+        <ThemeProvider>
+          <Provider>{children}</Provider>
         </ThemeProvider>
       </body>
     </html>
   )
 }
-
-
-import './globals.css'
