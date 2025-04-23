@@ -126,7 +126,8 @@ const EmployeeLoginPage = () => {
       case 'designer':
         router.push('/dashboard/designer')
         break
-    
+      default:
+        router.push('/dashboard')
     }
   }
 
