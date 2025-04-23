@@ -13,13 +13,11 @@ import {
 import {
   verifyToken, 
   checkRole,
-  checkTenantAccess
 } from "../middlewares/auth.middleware.js"
 
 const router = express.Router();
 
 router.use(verifyToken);
-router.use(checkTenantAccess);
 
 router.post('/pay',checkRole(["caisse", "admin"]), createPayment);
 router.get('/pay',checkRole(["caisse", "admin"]), getAllPayments);

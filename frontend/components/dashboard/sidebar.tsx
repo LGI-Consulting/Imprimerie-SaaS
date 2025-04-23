@@ -14,7 +14,7 @@ import {
   ChevronRight,
   FileBarChart,
 } from "lucide-react"
-import { cn } from "@/lib/utils/utils"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -37,12 +37,12 @@ export function DashboardSidebar({ isOpen, onToggle, currentUser, currentTenant 
 
   const routes = [
     {
-      name: "Tableau de bord",
+      name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
     },
     {
-      name: "Commandes",
+      name: "Orders",
       href: "/dashboard/orders",
       icon: ShoppingCart,
     },
@@ -52,27 +52,27 @@ export function DashboardSidebar({ isOpen, onToggle, currentUser, currentTenant 
       icon: Users,
     },
     {
-      name: "Inventaire",
+      name: "Inventory",
       href: "/dashboard/inventory",
       icon: Package,
     },
     {
-      name: "Paiements",
+      name: "Payments",
       href: "/dashboard/payments",
       icon: CreditCard,
     },
     {
-      name: "Rapports",
+      name: "Reports",
       href: "/dashboard/reports",
       icon: FileBarChart,
     },
     {
-      name: "Employés",
+      name: "Employees",
       href: "/dashboard/employees",
       icon: UserRound,
     },
     {
-      name: "Paramètres",
+      name: "Settings",
       href: "/dashboard/settings",
       icon: Settings,
     },

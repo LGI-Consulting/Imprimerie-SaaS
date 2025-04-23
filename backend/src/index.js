@@ -18,7 +18,6 @@ import commandeRoutes from './routes/commande.routes.js';
 import materiauRoutes from './routes/materiau.routes.js';
 import paiementRoutes from './routes/paiement.routes.js';
 import employeRoutes from './routes/employe.routes.js';
-import tenantRoutes from './routes/tenant.routes.js';
 //import remiseRoutes from './routes/remise.routes.js';
 //import { swaggerUi, specs } from './config/swagger.js';
 
@@ -32,7 +31,7 @@ const PORT = process.env.PORT;
 // Middlewares
 app.use(cookieParser());
 app.use(helmet()); // Sécurité
-app.use(cors());   // Gestion des CORS
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json()); // Parsing du JSON
 app.use(express.urlencoded({ extended: true })); // Parsing des URL encodées
 
@@ -43,7 +42,6 @@ app.use('/api/commandes', commandeRoutes);
 app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
 app.use('/api/employe', employeRoutes);
-app.use('/api/tenants', tenantRoutes);
 //app.use('/api/remise', remiseRoutes);
 
 

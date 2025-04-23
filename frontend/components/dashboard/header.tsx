@@ -10,8 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { NotificationCenter } from "@/components/dashboard/notifications/notification-center"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
 
@@ -34,7 +34,7 @@ export function DashboardHeader({ onMenuClick, currentUser, currentTenant }: Hea
       <div className="flex items-center gap-2 md:hidden">
         <Button variant="ghost" size="icon" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />
-          <span className="sr-only">Menu</span>
+          <span className="sr-only">Toggle menu</span>
         </Button>
         <span className="font-semibold">{currentTenant.name}</span>
       </div>

@@ -13,14 +13,12 @@ import {
 import { 
   verifyToken, 
   checkRole, 
-  checkTenantAccess 
 } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
 // Appliquer l'authentification à toutes les routes
 router.use(verifyToken);
-router.use(checkTenantAccess);
 
 // Routes commandes avec vérification des rôles appropriés
 // Liste des commandes accessible à tous les utilisateurs authentifiés

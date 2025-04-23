@@ -1,15 +1,15 @@
 import type React from "react"
-import { Inter } from "next/font/google"
-import { ColorModeScript, theme } from '@chakra-ui/react'
-import { ThemeProvider } from "@/components/theme-provider"
-import { Provider } from './provider'
 import "./globals.css"
+import { Inter } from "next/font/google"
+import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from '@/lib/auth-context'
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
   title: "Multi-Tenant Dashboard",
   description: "A responsive dashboard for multi-tenant applications",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -17,19 +17,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const colorMode = theme.config.initialColorMode
-
   return (
-    <html 
-      lang="en" 
-    >
-      <head>
-      <ColorModeScript initialColorMode={colorMode} />
-      </head>
-      <body>
-        <ThemeProvider>
-          <Provider>{children}</Provider>
-        </ThemeProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+            {children}
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   )
