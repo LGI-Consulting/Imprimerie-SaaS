@@ -355,6 +355,13 @@ export const createOrder = async (req, res) => {
 
     const orderResult = await client.query(createOrderQuery, [
       clientId,
+      new Date(), // Utilisez la date actuelle comme date de création
+      "reçue", // Définir le statut par défaut à "reçue"
+      1, // Priorité par défaut à 1
+      options?.comments || null, // Commentaires, ou null si non spécifié
+      employeId,
+      false, // est_commande_speciale par défaut à false
+      clientId,
       "reçue",
       1,
       options?.comments || null,
@@ -441,6 +448,25 @@ export const createOrder = async (req, res) => {
       employeId,
       `Commande ${orderNumberValue}: ${numExemplaires} exemplaires de ${materialType} ${requestedWidth}x${requestedLength}cm`
     ]);
+
+        // Insérer les fichiers d'impression
+        if (req.body.files && req.body.files.length > 0) {
+          for (const file of req.body.files) {
+              const { file_name, file_path } = file;
+              if (file_name && file_path) {
+                  const insertPrintFileQuery = `
+                      INSERT INTO print_files (commande_id, file_name, file_path)
+                      VALUES ($1, $2, $3)
+                  `;
+                  await client.query(insertPrintFileQuery, [
+                      commandeId,
+                      file_name,
+                      file_path
+                  ]);
+              }
+          }
+      }
+
 
     await client.query('COMMIT');
 

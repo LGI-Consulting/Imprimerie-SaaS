@@ -14,6 +14,7 @@ import {
   verifyToken, 
   checkRole, 
 } from '../middlewares/auth.middleware.js';
+import { uploadMiddleware, handleMulterErrors } from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
 
@@ -28,9 +29,14 @@ router.get('/status/:status', checkRole(['accueil', 'admin']), getOrdersByStatus
 router.get('/material/:materialType', checkRole(['accueil', 'admin']), getOrdersByMaterial);
 router.get('/:id', checkRole(['accueil', 'admin']), getOrderById);
 
-// Création et manipulation des commandes réservées aux utilisateurs avec rôles spécifiques
-router.post('/', checkRole(['accueil', 'admin']), createOrder);
-router.put('/:id', checkRole(['accueil', 'admin']), updateOrder);
+// Routes avec gestion des uploads de fichiers
+router.post('/', checkRole(['accueil', 'admin']), uploadMiddleware.array('files', 5), createOrder);
+router.put('/:id', checkRole(['accueil', 'admin']), uploadMiddleware.array('files', 5), updateOrder);
+
+// Route de suppression (sans besoin de multer)
 router.delete('/:id', checkRole(['admin']), deleteOrder);
+
+// Gestionnaire d'erreurs pour Multer
+router.use(handleMulterErrors);
 
 export default router;
