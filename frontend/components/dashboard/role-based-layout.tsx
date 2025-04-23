@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-export type UserRole = "admin" | "reception" | "cashier" | "designer"
+export type UserRole = "admin" | "accueil" | "caisse" | "graphiste"
 
 interface RoleBasedLayoutProps {
   children: ReactNode

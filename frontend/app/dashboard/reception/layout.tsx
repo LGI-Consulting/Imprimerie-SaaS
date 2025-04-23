@@ -31,12 +31,12 @@ export default function ReceptionLayout({ children }: { children: ReactNode }) {
     },
     {
       title: "Orders",
-      href: "/dashboard/reception/orders",
+      href: "/dashboard/orders",
       icon: FileText,
     },
     {
       title: "Clients",
-      href: "/dashboard/reception/clients",
+      href: "/dashboard/clients",
       icon: Users,
     },
     {

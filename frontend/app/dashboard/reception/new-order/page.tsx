@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -22,6 +22,8 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
+import { useOrders } from '@/hooks/use-orders';
+import { CreateOrderData } from '@/lib/order-service';
 
 // Form schema with file validation
 const formSchema = z.object({
@@ -48,55 +50,80 @@ const formSchema = z.object({
 
 type OrderFormValues = z.infer<typeof formSchema>
 
-// Sample client data for dropdown
-const clients = [
-  { id: "1", name: "John Smith" },
-  { id: "2", name: "Sarah Johnson" },
-  { id: "3", name: "Michael Brown" },
-  { id: "4", name: "Emily Davis" },
-  { id: "5", name: "David Wilson" },
+// Material options from order-service.ts
+const materialOptions = [
+  { value: "banner", label: "Bannière" },
+  { value: "vinyl", label: "Vinyle" },
+  { value: "sticker", label: "Sticker" },
+  { value: "canvas", label: "Toile" },
+  { value: "paper", label: "Papier" },
 ]
 
-// Sample printing options
-const orderTypes = [
-  "Business Cards",
-  "Flyers",
-  "Brochures",
-  "Posters",
-  "Banners",
-  "Postcards",
-  "Stickers",
-  "Custom Order",
-]
+// Additional options for each material type
+const additionalOptions = {
+  banner: [
+    { id: "lamination", label: "Lamination", type: "fixed", price: 5000 },
+    { id: "eyelets", label: "Œillets", type: "per_unit", price: 500 },
+  ],
+  vinyl: [
+    { id: "lamination", label: "Lamination", type: "fixed", price: 5000 },
+    { id: "cutting", label: "Découpe", type: "fixed", price: 3000 },
+  ],
+  sticker: [
+    { id: "lamination", label: "Lamination", type: "fixed", price: 5000 },
+    { id: "cutting", label: "Découpe", type: "fixed", price: 3000 },
+  ],
+  canvas: [
+    { id: "stretching", label: "Tension", type: "fixed", price: 10000 },
+  ],
+  paper: [
+    { id: "lamination", label: "Lamination", type: "fixed", price: 5000 },
+  ],
+}
 
-const paperTypes = ["Gloss", "Matte", "Uncoated", "Recycled", "Cardstock", "Bond", "Specialty"]
-
-const finishTypes = [
-  "None",
-  "Gloss Coating",
-  "Matte Coating",
-  "UV Coating",
-  "Lamination",
-  "Foil Stamping",
-  "Die Cutting",
-  "Embossing",
-]
-
-const sizeOptions = {
-  "Business Cards": ['Standard (3.5" x 2")', 'Square (2.5" x 2.5")', 'Slim (3.5" x 1.5")'],
-  Flyers: ['Letter (8.5" x 11")', 'Half Letter (5.5" x 8.5")', 'Legal (8.5" x 14")'],
-  Brochures: ['Tri-fold (8.5" x 11")', 'Bi-fold (8.5" x 11")', 'Z-fold (8.5" x 11")'],
-  Posters: ['Small (11" x 17")', 'Medium (18" x 24")', 'Large (24" x 36")'],
-  Banners: ["Small (2' x 4')", "Medium (3' x 6')", "Large (4' x 8')"],
-  Postcards: ['Standard (4" x 6")', 'Large (5" x 7")', 'Extra Large (6" x 9")'],
-  Stickers: ['Small (2" x 2")', 'Medium (3" x 3")', 'Large (4" x 4")'],
-  "Custom Order": ["Custom"],
+// Accepted file types
+const ACCEPTED_FILE_TYPES = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/ai': ['.ai'],
+  'application/pdf': ['.pdf'],
+  'image/psd': ['.psd'],
 }
 
 export default function NewOrderPage() {
   const [activeTab, setActiveTab] = useState("details")
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { createOrder, loading, error } = useOrders();
+  const [clients, setClients] = useState<Array<{id: string, name: string}>>([]);
+
+  // Fetch clients on component mount
+  useEffect(() => {
+    // In a real application, you would fetch clients from an API
+    // For now, we'll use a placeholder function
+    const fetchClients = async () => {
+      try {
+        // This would be replaced with an actual API call
+        // const response = await fetch('/api/clients');
+        // const data = await response.json();
+        
+        // Placeholder data
+        const placeholderClients = [
+          { id: "1", name: "John Smith" },
+          { id: "2", name: "Sarah Johnson" },
+          { id: "3", name: "Michael Brown" },
+          { id: "4", name: "Emily Davis" },
+          { id: "5", name: "David Wilson" },
+        ];
+        
+        setClients(placeholderClients);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      }
+    };
+    
+    fetchClients();
+  }, []);
 
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(formSchema),
@@ -113,15 +140,48 @@ export default function NewOrderPage() {
 
   const selectedOrderType = form.watch("orderType")
 
-  function onSubmit(values: OrderFormValues) {
-    setIsSubmitting(true)
-    // In a real app, this would be an API call
-    console.log(values)
-    console.log("Uploaded files:", uploadedFiles)
+  async function onSubmit(values: OrderFormValues) {
+    try {
+      setIsSubmitting(true);
+      
+      // Extract dimensions from size string if available
+      let width = 0;
+      let length = 0;
+      
+      if (values.size) {
+        const dimensions = values.size.match(/(\d+(\.\d+)?)/g);
+        if (dimensions && dimensions.length >= 2) {
+          width = parseFloat(dimensions[0]);
+          length = parseFloat(dimensions[1]);
+        }
+      }
+      
+      // Prepare order data according to the CreateOrderData interface
+      const orderData: CreateOrderData = {
+        clientInfo: {
+          client_id: values.clientId,
+          nom: clients.find(c => c.id === values.clientId)?.name.split(' ')[0] || '',
+          prenom: clients.find(c => c.id === values.clientId)?.name.split(' ')[1] || '',
+          telephone: '', // This should be fetched from client data
+          email: '', // This should be fetched from client data
+        },
+        materialType: values.orderType,
+        width: width || 0,
+        length: length || 0,
+        quantity: parseInt(values.quantity),
+        options: {
+          comments: values.notes,
+          designFiles: uploadedFiles.map(file => ({
+            name: file.name,
+            size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+            type: file.type,
+          })),
+        },
+        est_commande_speciale: values.rush,
+      };
 
-    // Simulate API delay
-    setTimeout(() => {
-      setIsSubmitting(false)
+      await createOrder(orderData);
+      
       toast({
         title: "Order created successfully",
         description: "The new print order has been created.",
@@ -131,7 +191,15 @@ export default function NewOrderPage() {
       form.reset()
       setUploadedFiles([])
       setActiveTab("details")
-    }, 1500)
+    } catch (err) {
+      toast({
+        title: "Error creating order",
+        description: "There was an error creating the order. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,14 +217,11 @@ export default function NewOrderPage() {
     // This would be a more complex calculation in a real app
     const basePrice =
       {
-        "Business Cards": 25,
-        Flyers: 40,
-        Brochures: 75,
-        Posters: 50,
-        Banners: 100,
-        Postcards: 30,
-        Stickers: 35,
-        "Custom Order": 60,
+        "banner": 100,
+        "vinyl": 80,
+        "sticker": 35,
+        "canvas": 150,
+        "paper": 60,
       }[selectedOrderType] || 0
 
     const quantity = Number(form.watch("quantity") || 1)
@@ -171,6 +236,12 @@ export default function NewOrderPage() {
         <h2 className="text-2xl font-bold tracking-tight">Create New Order</h2>
         <p className="text-muted-foreground">Create a new print order for a client.</p>
       </div>
+
+      {error && (
+        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
@@ -227,9 +298,9 @@ export default function NewOrderPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {orderTypes.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
+                              {materialOptions.map((type) => (
+                                <SelectItem key={type.value} value={type.value}>
+                                  {type.label}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -253,9 +324,14 @@ export default function NewOrderPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {sizeOptions[selectedOrderType as keyof typeof sizeOptions]?.map((size) => (
-                                  <SelectItem key={size} value={size}>
-                                    {size}
+                                {[
+                                  { value: "50x70", label: "50 x 70 cm" },
+                                  { value: "70x100", label: "70 x 100 cm" },
+                                  { value: "100x150", label: "100 x 150 cm" },
+                                  { value: "custom", label: "Custom size" },
+                                ].map((size) => (
+                                  <SelectItem key={size.value} value={size.value}>
+                                    {size.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -293,7 +369,9 @@ export default function NewOrderPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {paperTypes.map((type) => (
+                              {[
+                                "Gloss", "Matte", "Uncoated", "Recycled", "Cardstock", "Bond", "Specialty"
+                              ].map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {type}
                                 </SelectItem>
@@ -318,7 +396,16 @@ export default function NewOrderPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {finishTypes.map((type) => (
+                              {[
+                                "None",
+                                "Gloss Coating",
+                                "Matte Coating",
+                                "UV Coating",
+                                "Lamination",
+                                "Foil Stamping",
+                                "Die Cutting",
+                                "Embossing",
+                              ].map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {type}
                                 </SelectItem>
@@ -534,7 +621,7 @@ export default function NewOrderPage() {
                         </div>
                         <div>
                           <h3 className="text-sm font-medium text-muted-foreground">Order Type</h3>
-                          <p>{form.watch("orderType") || "Not selected"}</p>
+                          <p>{materialOptions.find(t => t.value === form.watch("orderType"))?.label || "Not selected"}</p>
                         </div>
                         <div>
                           <h3 className="text-sm font-medium text-muted-foreground">Size</h3>

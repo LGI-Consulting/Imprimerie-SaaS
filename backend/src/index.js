@@ -31,7 +31,7 @@ const PORT = process.env.PORT;
 // Middlewares
 app.use(cookieParser());
 app.use(helmet()); // Sécurité
-app.use(cors());   // Gestion des CORS
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json()); // Parsing du JSON
 app.use(express.urlencoded({ extended: true })); // Parsing des URL encodées
 
