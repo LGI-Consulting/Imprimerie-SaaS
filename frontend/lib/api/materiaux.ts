@@ -48,6 +48,44 @@ export interface MateriauxResponse {
   })[];
 }
 
+// Types pour les mouvements de stock
+export interface MouvementStock {
+  mouvement_id: number;
+  stock_id: number;
+  type_mouvement: 'entrée' | 'sortie' | 'ajustement';
+  quantite: number;
+  date_mouvement: string;
+  commande_id?: number;
+  employe_id?: number;
+  commentaire?: string;
+  numero_commande?: string;
+  employe_nom?: string;
+  employe_prenom?: string;
+}
+
+export interface MouvementStockCreate {
+  stock_id: number;
+  type_mouvement: 'entrée' | 'sortie' | 'ajustement';
+  quantite: number;
+  commentaire?: string;
+  commande_id?: number;
+  employe_id?: number;
+}
+
+export interface MouvementsResponse {
+  success: boolean;
+  data: MouvementStock[];
+}
+
+export interface StockResponse {
+  success: boolean;
+  data: StockMateriau & {
+    materiau_nom: string;
+    type_materiau: string;
+    materiau_unite_mesure: string;
+  };
+}
+
 // Types pour les filtres
 export interface MateriauFilters {
   term?: string;
@@ -98,6 +136,26 @@ export const materiaux = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/materiau/${id}`);
+  },
+
+  // Fonctions pour les mouvements de stock
+  getMouvements: async (stockId: number): Promise<MouvementStock[]> => {
+    const response = await api.get<MouvementsResponse>(`/materiau/stock/${stockId}/mouvements`);
+    return response.data.data;
+  },
+
+  createMouvement: async (data: MouvementStockCreate): Promise<MouvementStock> => {
+    const response = await api.post<{ success: boolean; data: MouvementStock }>('/materiau/stock/mouvement', data);
+    return response.data.data;
+  },
+
+  getStockById: async (stockId: number): Promise<StockMateriau & {
+    materiau_nom: string;
+    type_materiau: string;
+    materiau_unite_mesure: string;
+  }> => {
+    const response = await api.get<StockResponse>(`/materiau/stock/${stockId}`);
+    return response.data.data;
   },
 
   // Fonctions utilitaires

@@ -486,3 +486,206 @@ export const deleteMateriau = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get a specific stock by ID
+ */
+export const getStockById = async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    
+    const query = `
+      SELECT s.*, m.nom as materiau_nom, m.type_materiau, m.unite_mesure as materiau_unite_mesure
+      FROM stocks_materiaux_largeur s
+      JOIN materiaux m ON s.materiau_id = m.materiau_id
+      WHERE s.stock_id = $1
+    `;
+    
+    const result = await pool.query(query, [stockId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Stock non trouvé"
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error getting stock by ID:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la récupération du stock",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Create a new stock movement
+ */
+export const createMouvementStock = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { 
+      stock_id, 
+      type_mouvement, 
+      quantite, 
+      commentaire,
+      commande_id,
+      employe_id
+    } = req.body;
+    
+    // Validation des données
+    if (!stock_id || !type_mouvement || !quantite) {
+      return res.status(400).json({
+        success: false,
+        message: "Le stock ID, le type de mouvement et la quantité sont requis"
+      });
+    }
+    
+    // Vérifier si le stock existe
+    const stockQuery = `
+      SELECT * FROM stocks_materiaux_largeur
+      WHERE stock_id = $1
+    `;
+    
+    const stockResult = await client.query(stockQuery, [stock_id]);
+    
+    if (stockResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Stock non trouvé"
+      });
+    }
+    
+    const stock = stockResult.rows[0];
+    
+    // Vérifier si le stock est suffisant pour une sortie
+    if (type_mouvement === 'sortie' && stock.quantite_en_stock < quantite) {
+      return res.status(400).json({
+        success: false,
+        message: "Stock insuffisant pour cette sortie"
+      });
+    }
+    
+    await client.query('BEGIN');
+    
+    // Créer le mouvement
+    const insertMouvementQuery = `
+      INSERT INTO mouvements_stock (
+        stock_id,
+        type_mouvement,
+        quantite,
+        commentaire,
+        commande_id,
+        employe_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
+    
+    const mouvementValues = [
+      stock_id,
+      type_mouvement,
+      quantite,
+      commentaire || null,
+      commande_id || null,
+      employe_id || req.user.employe_id
+    ];
+    
+    const mouvementResult = await client.query(insertMouvementQuery, mouvementValues);
+    const mouvement = mouvementResult.rows[0];
+    
+    // Mettre à jour le stock
+    const updateStockQuery = `
+      UPDATE stocks_materiaux_largeur
+      SET 
+        quantite_en_stock = CASE 
+          WHEN $2 = 'entrée' THEN quantite_en_stock + $3
+          WHEN $2 = 'sortie' THEN quantite_en_stock - $3
+          ELSE quantite_en_stock
+        END,
+        date_modification = CURRENT_TIMESTAMP
+      WHERE stock_id = $1
+      RETURNING *
+    `;
+    
+    const updateStockResult = await client.query(updateStockQuery, [stock_id, type_mouvement, quantite]);
+    
+    await client.query('COMMIT');
+    
+    res.status(201).json({
+      success: true,
+      message: "Mouvement de stock créé avec succès",
+      data: {
+        mouvement,
+        stock: updateStockResult.rows[0]
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Error creating stock movement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la création du mouvement de stock",
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Get stock movements history
+ */
+export const getMouvementsStock = async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    
+    // Vérifier si le stock existe
+    const stockQuery = `
+      SELECT * FROM stocks_materiaux_largeur
+      WHERE stock_id = $1
+    `;
+    
+    const stockResult = await pool.query(stockQuery, [stockId]);
+    
+    if (stockResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Stock non trouvé"
+      });
+    }
+    
+    // Récupérer les mouvements
+    const mouvementsQuery = `
+      SELECT m.*, 
+        c.numero_commande,
+        e.nom as employe_nom, e.prenom as employe_prenom
+      FROM mouvements_stock m
+      LEFT JOIN commandes c ON m.commande_id = c.commande_id
+      LEFT JOIN employes e ON m.employe_id = e.employe_id
+      WHERE m.stock_id = $1
+      ORDER BY m.date_mouvement DESC
+    `;
+    
+    const mouvementsResult = await pool.query(mouvementsQuery, [stockId]);
+    
+    res.status(200).json({
+      success: true,
+      data: mouvementsResult.rows
+    });
+  } catch (error) {
+    console.error("Error getting stock movements:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la récupération des mouvements de stock",
+      error: error.message
+    });
+  }
+};
