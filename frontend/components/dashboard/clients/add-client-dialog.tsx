@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { useState } from "react"
+import { Loader2, UserPlus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -16,29 +18,26 @@ import {
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
+  nom: z.string().min(2, {
+    message: "Le nom doit contenir au moins 2 caractères.",
+  }),
+  prenom: z.string().min(2, {
+    message: "Le prénom doit contenir au moins 2 caractères.",
   }),
   email: z.string().email({
-    message: "Please enter a valid email address.",
+    message: "Veuillez entrer une adresse email valide.",
+  }).optional().transform(val => val || ""),
+  telephone: z.string().min(10, {
+    message: "Le numéro de téléphone doit contenir au moins 10 chiffres.",
   }),
-  phone: z.string().min(10, {
-    message: "Phone number must be at least 10 digits.",
-  }),
-  address: z.string().min(5, {
-    message: "Address must be at least 5 characters.",
-  }),
-  city: z.string().min(2, {
-    message: "City must be at least 2 characters.",
-  }),
-  state: z.string().min(2, {
-    message: "State must be at least 2 characters.",
-  }),
-  zipCode: z.string().min(5, {
-    message: "Zip code must be at least 5 characters.",
-  }),
+  adresse: z.string().min(5, {
+    message: "L'adresse doit contenir au moins 5 caractères.",
+  }).optional().transform(val => val || ""),
   notes: z.string().optional(),
 })
 
@@ -46,172 +45,217 @@ interface AddClientDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAddClient: (client: {
-    name: string
-    email: string
-    phone: string
-    address: string
-    city: string
-    state: string
-    zipCode: string
+    nom: string
+    prenom: string
+    email?: string | null
+    telephone: string
+    adresse?: string | null
     notes?: string
   }) => void
 }
 
 export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("informations")
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
+      nom: "",
+      prenom: "",
       email: "",
-      phone: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
+      telephone: "",
+      adresse: "",
       notes: "",
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    onAddClient(values)
-    onOpenChange(false)
-    form.reset()
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true)
+    setError(null)
+    
+    try {
+      await onAddClient({
+        nom: values.nom,
+        prenom: values.prenom,
+        email: values.email || null,
+        telephone: values.telephone,
+        adresse: values.adresse || null,
+        notes: values.notes || undefined,
+      })
+      onOpenChange(false)
+      form.reset()
+    } catch (err) {
+      console.error("Erreur lors de l'ajout du client:", err)
+      setError("Une erreur est survenue lors de l'ajout du client. Veuillez réessayer.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Add New Client</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            Ajouter un nouveau client
+          </DialogTitle>
           <DialogDescription>
-            Enter the client details below. Required fields are marked with an asterisk.
+            Entrez les informations du client ci-dessous. Les champs obligatoires sont marqués d'un astérisque.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Smith" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="john.smith@example.com" type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="(555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="sm:col-span-2">
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="informations">Informations principales</TabsTrigger>
+            <TabsTrigger value="details">Détails supplémentaires</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="informations">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="nom"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nom*</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Dupont" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="prenom"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prénom*</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Jean" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="jean.dupont@example.com" type="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="telephone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Téléphone*</FormLabel>
+                        <FormControl>
+                          <Input placeholder="0123456789" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="adresse"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>Adresse</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Adresse complète du client"
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>Adresse complète incluant le code postal si possible</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Ajout en cours...
+                      </>
+                    ) : (
+                      "Ajouter le client"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </TabsContent>
+          
+          <TabsContent value="details">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                   control={form.control}
-                  name="address"
+                  name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Address*</FormLabel>
+                      <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <Input placeholder="123 Main St" {...field} />
+                        <Textarea
+                          placeholder="Informations supplémentaires sur le client"
+                          className="resize-none min-h-[200px]"
+                          {...field}
+                        />
                       </FormControl>
+                      <FormDescription>
+                        Ajoutez des informations complémentaires sur le client, ses préférences, etc.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="New York" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State*</FormLabel>
-                      <FormControl>
-                        <Input placeholder="NY" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="zipCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Zip Code*</FormLabel>
-                      <FormControl>
-                        <Input placeholder="10001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Additional information about the client"
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Any additional information about this client</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Client</Button>
-            </DialogFooter>
-          </form>
-        </Form>
+                <Separator />
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Ajout en cours...
+                      </>
+                    ) : (
+                      "Ajouter le client"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   )
