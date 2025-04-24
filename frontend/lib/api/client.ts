@@ -26,6 +26,26 @@ export interface ClientsResponse {
   data: Client[];
 }
 
+// Types pour les statistiques et commandes
+export interface ClientStats {
+  totalOrders: number;
+  totalAmount: number;
+  frequency: {
+    last6Months: number;
+    monthly: string;
+  };
+  materialPreferences: Record<string, number>;
+}
+
+export interface ClientOrder {
+  commande_id: number;
+  date_creation: string;
+  statut: string;
+  numero_facture: string;
+  montant_final: number;
+  // Autres champs de la commande
+}
+
 // Fonctions pour les clients
 export const clients = {
   getAll: async (): Promise<Client[]> => {
@@ -43,7 +63,7 @@ export const clients = {
 
   search: async (query: string): Promise<Client[]> => {
     const response = await api.get<ClientsResponse>('/clients/search', {
-      params: { query }
+      params: { q: query }
     });
     return response.data.data;
   },
@@ -66,6 +86,17 @@ export const clients = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/clients/${id}`);
+  },
+
+  // Nouvelles fonctions pour les commandes et statistiques
+  getOrders: async (id: number): Promise<ClientOrder[]> => {
+    const response = await api.get<{ success: boolean; message: string; data: ClientOrder[] }>(`/clients/${id}/orders`);
+    return response.data.data;
+  },
+
+  getStats: async (id: number): Promise<ClientStats> => {
+    const response = await api.get<{ success: boolean; message: string; data: ClientStats }>(`/clients/${id}/stats`);
+    return response.data.data;
   },
 
   // Fonction utilitaire pour formater le nom complet

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-export type UserRole = "admin" | "reception" | "cashier" | "designer"
+export type UserRole = "admin" | "accueil" | "caisse" | "graphiste"
 
 interface RoleBasedLayoutProps {
   children: ReactNode
@@ -61,7 +61,12 @@ export function RoleBasedLayout({ children, navigation, role, currentUser, curre
 
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel>{role.charAt(0).toUpperCase() + role.slice(1)} Dashboard</SidebarGroupLabel>
+              <SidebarGroupLabel>
+                {role === "admin" && "Tableau de bord administrateur"}
+                {role === "accueil" && "Tableau de bord accueil"}
+                {role === "caisse" && "Tableau de bord caisse"}
+                {role === "graphiste" && "Tableau de bord graphiste"}
+              </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {navigation.map((item) => (

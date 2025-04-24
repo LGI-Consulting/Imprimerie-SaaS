@@ -4,180 +4,135 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-
-interface OrderItem {
-  id: string
-  name: string
-  quantity: number
-  price: number
-}
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Commande } from "@/lib/api/types/commande"
+import { formatDate } from "@/lib/utils"
 
 interface ViewOrderDialogProps {
+  order: Commande
   open: boolean
   onOpenChange: (open: boolean) => void
-  order: {
-    id: string
-    clientName: string
-    date: string
-    status: string
-    items?: OrderItem[]
-    total?: number
-    notes?: string
-    shippingAddress?: string
-    paymentMethod?: string
-    dueDate?: string
-  }
 }
 
-export function ViewOrderDialog({ open, onOpenChange, order }: ViewOrderDialogProps) {
-  // Status badge color mapping
+export function ViewOrderDialog({
+  order,
+  open,
+  onOpenChange,
+}: ViewOrderDialogProps) {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "completed":
-        return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "processing":
-        return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-      case "cancelled":
-        return "bg-red-100 text-red-800 hover:bg-red-100"
+      case "en_attente":
+        return "bg-yellow-500"
+      case "en_cours":
+        return "bg-blue-500"
+      case "terminee":
+        return "bg-green-500"
+      case "annulee":
+        return "bg-red-500"
       default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-100"
+        return "bg-gray-500"
     }
   }
 
-  // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("fr-FR", {
       style: "currency",
-      currency: "USD",
+      currency: "EUR",
     }).format(amount)
   }
 
-  // Calculate total if not provided
   const calculateTotal = () => {
-    if (order.total) return formatCurrency(order.total)
-    if (order.items) {
-      const total = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-      return formatCurrency(total)
-    }
-    return formatCurrency(0)
+    return order.details.reduce(
+      (total, item) => total + item.quantite * item.prix_unitaire,
+      0
+    )
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Order Details</DialogTitle>
-          <DialogDescription>Detailed information about order {order.id}</DialogDescription>
+          <DialogTitle>Détails de la commande #{order.id}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">{order.id}</h3>
-              <p className="text-sm text-muted-foreground">Client: {order.clientName}</p>
-            </div>
-            <Badge variant="outline" className={getStatusColor(order.status)}>
-              {order.status}
-            </Badge>
-          </div>
-
-          <Separator />
-
+        <div className="grid gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Order Date</h4>
-              <p>{new Date(order.date).toLocaleDateString()}</p>
+              <h3 className="font-semibold">Client</h3>
+              <p>
+                {order.clientInfo.prenom} {order.clientInfo.nom}
+              </p>
+              <p>{order.clientInfo.telephone}</p>
+              {order.clientInfo.email && <p>{order.clientInfo.email}</p>}
             </div>
-            {order.dueDate && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Due Date</h4>
-                <p>{new Date(order.dueDate).toLocaleDateString()}</p>
-              </div>
-            )}
-            {order.paymentMethod && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Payment Method</h4>
-                <p>{order.paymentMethod}</p>
-              </div>
-            )}
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Total</h4>
-              <p className="font-semibold">{calculateTotal()}</p>
+              <h3 className="font-semibold">Informations de commande</h3>
+              <p>Date: {formatDate(order.created_at)}</p>
+              <p>
+                Statut:{" "}
+                <Badge className={getStatusColor(order.status)}>
+                  {order.status}
+                </Badge>
+              </p>
+              <p>Total: {formatCurrency(calculateTotal())}</p>
             </div>
           </div>
 
-          {order.shippingAddress && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Shipping Address</h4>
-                <p className="text-sm">{order.shippingAddress}</p>
-              </div>
-            </>
+          {order.clientInfo.adresse && (
+            <div>
+              <h3 className="font-semibold">Adresse de livraison</h3>
+              <p>{order.clientInfo.adresse}</p>
+            </div>
           )}
 
-          {order.items && order.items.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Order Items</h4>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {order.items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.price * item.quantity)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-right font-medium">
-                          Total:
-                        </TableCell>
-                        <TableCell className="text-right font-bold">{calculateTotal()}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </>
-          )}
+          <div>
+            <h3 className="font-semibold mb-2">Articles commandés</h3>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Matériau</TableHead>
+                  <TableHead>Quantité</TableHead>
+                  <TableHead>Dimensions</TableHead>
+                  <TableHead>Prix unitaire</TableHead>
+                  <TableHead>Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {order.details.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.materiau_id}</TableCell>
+                    <TableCell>{item.quantite}</TableCell>
+                    <TableCell>{item.dimensions}</TableCell>
+                    <TableCell>{formatCurrency(item.prix_unitaire)}</TableCell>
+                    <TableCell>
+                      {formatCurrency(item.quantite * item.prix_unitaire)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
-          {order.notes && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Notes</h4>
-                <p className="text-sm">{order.notes}</p>
-              </div>
-            </>
+          {order.commentaires && (
+            <div>
+              <h3 className="font-semibold">Commentaires</h3>
+              <p>{order.commentaires}</p>
+            </div>
           )}
         </div>
-
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Close</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
+

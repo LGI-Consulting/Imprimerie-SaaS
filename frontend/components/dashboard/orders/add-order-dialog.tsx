@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { CalendarIcon, Plus, Trash2 } from "lucide-react"
-import { format } from "date-fns"
+import * as z from "zod"
+import { CalendarIcon, Plus, Trash2, Upload } from "lucide-react"
+import { useDropzone } from 'react-dropzone'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -20,243 +20,368 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-
-// Sample client data for dropdown
-const clients = [
-  { id: "1", name: "John Smith" },
-  { id: "2", name: "Sarah Johnson" },
-  { id: "3", name: "Michael Brown" },
-  { id: "4", name: "Emily Davis" },
-  { id: "5", name: "David Wilson" },
-]
-
-// Sample inventory items for dropdown
-const inventoryItems = [
-  { id: "1", name: "Cotton Fabric", price: 5.99 },
-  { id: "2", name: "Polyester Blend", price: 4.5 },
-  { id: "3", name: "Denim", price: 8.75 },
-  { id: "4", name: "Silk", price: 15.99 },
-  { id: "5", name: "Wool", price: 12.25 },
-  { id: "6", name: "Linen", price: 9.5 },
-  { id: "7", name: "Leather", price: 22.99 },
-  { id: "8", name: "Buttons (pack of 100)", price: 3.99 },
-]
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { commandes } from "@/lib/api/commandes"
+import { materiaux } from "@/lib/api/materiaux"
+import {  Materiau } from "@/lib/api/types"
+import { CommandeCreate } from "@/lib/api/commandes"
+import { formatCurrency } from "@/lib/api/utils"
+import { toast } from "sonner"
+import { clients } from "@/lib/api/client"
+import { Client } from "@/lib/api/types"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 // Form schema
 const formSchema = z.object({
-  clientId: z.string({
-    required_error: "Please select a client",
+  clientInfo: z.object({
+    nom: z.string().min(1, "Le nom est requis"),
+    prenom: z.string().min(1, "Le prénom est requis"),
+    telephone: z.string().min(1, "Le téléphone est requis"),
+    email: z.string().email("Email invalide").optional(),
+    adresse: z.string().optional(),
   }),
-  orderDate: z.date({
-    required_error: "Please select a date",
-  }),
-  dueDate: z.date({
-    required_error: "Please select a due date",
-  }),
-  status: z.string({
-    required_error: "Please select a status",
-  }),
-  notes: z.string().optional(),
-  items: z
-    .array(
-      z.object({
-        itemId: z.string({
-          required_error: "Please select an item",
-        }),
-        quantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-          message: "Quantity must be a positive number",
-        }),
-        price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-          message: "Price must be a non-negative number",
-        }),
-      }),
-    )
-    .min(1, {
-      message: "Please add at least one item to the order",
-    }),
+  details: z.array(z.object({
+    materiau_id: z.number(),
+    quantite: z.number().min(1, "La quantité doit être supérieure à 0"),
+    dimensions: z.string().refine((val) => {
+      const [largeur, hauteur] = val.split('x').map(Number)
+      return !isNaN(largeur) && !isNaN(hauteur) && largeur > 0 && hauteur > 0
+    }, "Format invalide. Utilisez le format LxH (ex: 100x200)"),
+    prix_unitaire: z.number().min(0, "Le prix unitaire doit être positif"),
+    commentaires: z.string().optional(),
+  })),
+  commentaires: z.string().optional(),
+  est_commande_speciale: z.boolean().default(false),
+  priorite: z.number().min(0).max(5).default(1),
 })
 
 interface AddOrderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSuccess?: (data: any) => void
 }
 
-export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
-  const [orderItems, setOrderItems] = useState<{ id: string; itemId: string; quantity: string; price: string }[]>([
-    { id: crypto.randomUUID(), itemId: "", quantity: "1", price: "" },
-  ])
+export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialogProps) {
+  const [materiauList, setMateriauList] = useState<Materiau[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [clientSearch, setClientSearch] = useState("")
+  const [clientsList, setClientsList] = useState<Client[]>([])
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      clientId: "",
-      orderDate: new Date(),
-      dueDate: new Date(new Date().setDate(new Date().getDate() + 7)),
-      status: "pending",
-      notes: "",
-      items: [{ itemId: "", quantity: "1", price: "" }],
+      clientInfo: {
+        nom: "",
+        prenom: "",
+        telephone: "",
+        email: "",
+        adresse: "",
+      },
+      details: [{
+        materiau_id: 0,
+        quantite: 1,
+        dimensions: "",
+        prix_unitaire: 0,
+        commentaires: "",
+      }],
+      commentaires: "",
+      est_commande_speciale: false,
+      priorite: 1,
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values)
-    onOpenChange(false)
-    form.reset()
-    setOrderItems([{ id: crypto.randomUUID(), itemId: "", quantity: "1", price: "" }])
+  // Charger la liste des matériaux
+  const loadMateriaux = useCallback(async () => {
+    try {
+      const response = await fetch('/api/materiaux')
+      if (!response.ok) throw new Error('Erreur lors du chargement des matériaux')
+      const data = await response.json()
+      setMateriauList(data)
+    } catch (error) {
+      console.error('Erreur lors du chargement des matériaux:', error)
+      setError('Erreur lors du chargement des matériaux')
+    }
+  }, [])
+
+  // Charger les matériaux au montage du composant
+  useEffect(() => {
+    loadMateriaux()
+  }, [loadMateriaux])
+
+  // Configuration de dropzone pour les fichiers
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: {
+      'application/pdf': ['.pdf'],
+      'image/*': ['.png', '.jpg', '.jpeg'],
+    },
+    onDrop: (acceptedFiles) => {
+      setSelectedFiles(prev => [...prev, ...acceptedFiles])
+    }
+  })
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  const addItem = () => {
-    setOrderItems([...orderItems, { id: crypto.randomUUID(), itemId: "", quantity: "1", price: "" }])
+  const addDetail = () => {
+    const currentDetails = form.getValues("details")
+    form.setValue("details", [
+      ...currentDetails,
+      {
+        materiau_id: 0,
+        quantite: 1,
+        dimensions: "",
+        prix_unitaire: 0,
+        commentaires: "",
+      }
+    ])
   }
 
-  const removeItem = (id: string) => {
-    if (orderItems.length > 1) {
-      setOrderItems(orderItems.filter((item) => item.id !== id))
-
-      // Update form values
-      const currentItems = form.getValues("items")
-      const updatedItems = currentItems.filter((_, index) => orderItems[index].id !== id)
-      form.setValue("items", updatedItems)
+  const removeDetail = (index: number) => {
+    const currentDetails = form.getValues("details")
+    if (currentDetails.length > 1) {
+      form.setValue("details", currentDetails.filter((_, i) => i !== index))
     }
   }
 
-  const updateItemPrice = (index: number, itemId: string) => {
-    const selectedItem = inventoryItems.find((item) => item.id === itemId)
-    if (selectedItem) {
-      const updatedItems = [...orderItems]
-      updatedItems[index].price = selectedItem.price.toString()
-      setOrderItems(updatedItems)
-
-      // Update form values
-      form.setValue(`items.${index}.price`, selectedItem.price.toString())
+  const updatePrixUnitaire = (index: number, materiauId: number) => {
+    const materiau = materiauList.find(m => m.materiau_id === materiauId)
+    if (materiau) {
+      const dimensions = form.getValues(`details.${index}.dimensions`)
+      if (dimensions) {
+        const [largeur, hauteur] = dimensions.split('x').map(Number)
+        if (!isNaN(largeur) && !isNaN(hauteur)) {
+          const surface = largeur * hauteur
+          const prix = materiau.prix_unitaire * surface
+          form.setValue(`details.${index}.prix_unitaire`, prix)
+        }
+      } else {
+        form.setValue(`details.${index}.prix_unitaire`, materiau.prix_unitaire)
+      }
     }
   }
 
-  // Calculate total
+  // Calculer le total
   const calculateTotal = () => {
-    return orderItems
-      .reduce((total, item, index) => {
-        const quantity = Number(form.getValues(`items.${index}.quantity`) || 0)
-        const price = Number(form.getValues(`items.${index}.price`) || 0)
-        return total + quantity * price
-      }, 0)
-      .toFixed(2)
+    const details = form.getValues("details")
+    return details.reduce((total, detail) => {
+      return total + (detail.quantite * detail.prix_unitaire)
+    }, 0)
+  }
+
+  // Rechercher des clients
+  const searchClients = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setClientsList([])
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const results = await clients.search(query)
+      setClientsList(results)
+    } catch (error) {
+      console.error('Erreur lors de la recherche des clients:', error)
+      toast.error('Erreur lors de la recherche des clients')
+    } finally {
+      setIsSearching(false)
+    }
+  }, [])
+
+  // Sélectionner un client
+  const handleClientSelect = (client: Client) => {
+    setSelectedClient(client)
+    form.setValue("clientInfo", {
+      nom: client.nom,
+      prenom: client.prenom,
+      telephone: client.telephone,
+      email: client.email || "",
+      adresse: client.adresse || "",
+    })
+  }
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const orderData = {
+        clientInfo: values.clientInfo,
+        details: values.details,
+        commentaires: values.commentaires || '',
+        est_commande_speciale: values.est_commande_speciale,
+        priorite: values.priorite,
+        files: selectedFiles,
+      }
+
+      const result = await commandes.create(orderData)
+      
+      if (onSuccess) {
+        onSuccess(result)
+      }
+      
+      onOpenChange(false)
+      form.reset()
+      setSelectedFiles([])
+    } catch (error) {
+      console.error("Erreur lors de la création de la commande:", error)
+      setError("Erreur lors de la création de la commande")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Order</DialogTitle>
+          <DialogTitle>Nouvelle commande</DialogTitle>
           <DialogDescription>
-            Enter the order details below. Required fields are marked with an asterisk.
+            Créez une nouvelle commande en remplissant les informations ci-dessous.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <FormField
                 control={form.control}
-                name="clientId"
+                name="clientInfo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Client*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a client" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
+                    <FormLabel>Client</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {selectedClient ? clients.getFullName(selectedClient) : "Sélectionner un client..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput
+                            placeholder="Rechercher un client..."
+                            value={clientSearch}
+                            onValueChange={(value) => {
+                              setClientSearch(value)
+                              searchClients(value)
+                            }}
+                          />
+                          <CommandEmpty>
+                            {isSearching ? "Recherche en cours..." : "Aucun client trouvé"}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {clientsList.map((client) => (
+                              <CommandItem
+                                key={client.client_id}
+                                value={clients.getFullName(client)}
+                                onSelect={() => handleClientSelect(client)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedClient?.client_id === client.client_id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {clients.getFullName(client)}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription>
+                      Recherchez un client existant ou créez-en un nouveau ci-dessous.
+                    </FormDescription>
                   </FormItem>
                 )}
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="clientInfo.nom"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nom</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="clientInfo.prenom"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prénom</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="clientInfo.telephone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Téléphone</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="clientInfo.email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <FormField
                 control={form.control}
-                name="status"
+                name="clientInfo.adresse"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="orderDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Order Date*</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${
-                              !field.value ? "text-muted-foreground" : ""
-                            }`}
-                          >
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="dueDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Due Date*</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${
-                              !field.value ? "text-muted-foreground" : ""
-                            }`}
-                          >
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
+                    <FormLabel>Adresse</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -264,48 +389,52 @@ export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium">Order Items*</h3>
-                <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                  <Plus className="mr-1 h-4 w-4" /> Add Item
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium">Articles*</h3>
+                <Button type="button" variant="outline" size="sm" onClick={addDetail}>
+                  <Plus className="mr-1 h-4 w-4" /> Ajouter un article
                 </Button>
               </div>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Price</TableHead>
+                      <TableHead>Matériau</TableHead>
+                      <TableHead>Dimensions</TableHead>
+                      <TableHead>Quantité</TableHead>
+                      <TableHead>Prix unitaire</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orderItems.map((item, index) => (
-                      <TableRow key={item.id}>
+                    {form.getValues("details").map((_, index) => (
+                      <TableRow key={index}>
                         <TableCell>
                           <FormField
                             control={form.control}
-                            name={`items.${index}.itemId`}
+                            name={`details.${index}.materiau_id`}
                             render={({ field }) => (
                               <FormItem className="space-y-0 mb-0">
                                 <Select
                                   onValueChange={(value) => {
-                                    field.onChange(value)
-                                    updateItemPrice(index, value)
+                                    field.onChange(parseInt(value))
+                                    updatePrixUnitaire(index, parseInt(value))
                                   }}
-                                  defaultValue={field.value}
+                                  value={field.value.toString()}
                                 >
                                   <FormControl>
                                     <SelectTrigger className="w-[180px]">
-                                      <SelectValue placeholder="Select item" />
+                                      <SelectValue placeholder="Sélectionner" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    {inventoryItems.map((invItem) => (
-                                      <SelectItem key={invItem.id} value={invItem.id}>
-                                        {invItem.name}
+                                    {materiauList.map((materiau) => (
+                                      <SelectItem 
+                                        key={materiau.materiau_id} 
+                                        value={materiau.materiau_id.toString()}
+                                      >
+                                        {materiau.nom || materiau.type_materiau}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
@@ -318,11 +447,11 @@ export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
                         <TableCell>
                           <FormField
                             control={form.control}
-                            name={`items.${index}.quantity`}
+                            name={`details.${index}.dimensions`}
                             render={({ field }) => (
                               <FormItem className="space-y-0 mb-0">
                                 <FormControl>
-                                  <Input type="number" min="1" className="w-[80px]" {...field} />
+                                  <Input {...field} placeholder="LxH" className="w-[100px]" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -332,16 +461,17 @@ export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
                         <TableCell>
                           <FormField
                             control={form.control}
-                            name={`items.${index}.price`}
+                            name={`details.${index}.quantite`}
                             render={({ field }) => (
                               <FormItem className="space-y-0 mb-0">
                                 <FormControl>
-                                  <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                      $
-                                    </span>
-                                    <Input className="pl-7 w-[100px]" {...field} />
-                                  </div>
+                                  <Input 
+                                    type="number" 
+                                    min="1" 
+                                    className="w-[80px]" 
+                                    {...field}
+                                    onChange={e => field.onChange(parseInt(e.target.value))}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -349,19 +479,37 @@ export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
                           />
                         </TableCell>
                         <TableCell>
-                          $
-                          {(
-                            Number(form.watch(`items.${index}.quantity`) || 0) *
-                            Number(form.watch(`items.${index}.price`) || 0)
-                          ).toFixed(2)}
+                          <FormField
+                            control={form.control}
+                            name={`details.${index}.prix_unitaire`}
+                            render={({ field }) => (
+                              <FormItem className="space-y-0 mb-0">
+                                <FormControl>
+                                  <Input 
+                                    className="w-[100px]" 
+                                    {...field}
+                                    value={field.value}
+                                    onChange={e => field.onChange(parseFloat(e.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(
+                            form.getValues(`details.${index}.quantite`) *
+                            form.getValues(`details.${index}.prix_unitaire`)
+                          )}
                         </TableCell>
                         <TableCell>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeItem(item.id)}
-                            disabled={orderItems.length <= 1}
+                            onClick={() => removeDetail(index)}
+                            disabled={form.getValues("details").length <= 1}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -369,40 +517,126 @@ export function AddOrderDialog({ open, onOpenChange }: AddOrderDialogProps) {
                       </TableRow>
                     ))}
                     <TableRow>
-                      <TableCell colSpan={3} className="text-right font-medium">
+                      <TableCell colSpan={4} className="text-right font-medium">
                         Total:
                       </TableCell>
-                      <TableCell className="font-bold">${calculateTotal()}</TableCell>
+                      <TableCell className="font-bold">{formatCurrency(calculateTotal())}</TableCell>
                       <TableCell></TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </div>
-              {form.formState.errors.items && (
-                <p className="text-sm font-medium text-destructive mt-2">{form.formState.errors.items.message}</p>
-              )}
             </div>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Additional information about the order" className="resize-none" {...field} />
-                  </FormControl>
-                  <FormDescription>Any additional information about this order</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Fichiers</h3>
+                <div {...getRootProps()} className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:border-primary">
+                  <input {...getInputProps()} />
+                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Glissez-déposez des fichiers ici ou cliquez pour sélectionner
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    PDF, PNG, JPG jusqu'à 10MB
+                  </p>
+                </div>
+                {selectedFiles.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 border rounded">
+                        <span className="text-sm">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeFile(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="est_commande_speciale"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          className="accent-primary"
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        Commande spéciale
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="priorite"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Priorité</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(parseInt(value))}
+                        value={field.value.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner la priorité" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">Normale</SelectItem>
+                          <SelectItem value="2">Moyenne</SelectItem>
+                          <SelectItem value="3">Haute</SelectItem>
+                          <SelectItem value="4">Très haute</SelectItem>
+                          <SelectItem value="5">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="commentaires"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Informations supplémentaires sur la commande" 
+                        className="resize-none" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription>Toute information additionnelle concernant cette commande</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                Annuler
               </Button>
-              <Button type="submit">Create Order</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Création..." : "Créer la commande"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>
