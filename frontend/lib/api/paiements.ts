@@ -13,6 +13,8 @@ export interface PaiementCreate {
   client_id: number;
   payment_method: MethodePaiement;
   description?: string;
+  montant_recu: number;
+  monnaie_rendue: number;
 }
 
 export interface PaiementUpdate {
@@ -21,6 +23,8 @@ export interface PaiementUpdate {
   payment_method?: MethodePaiement;
   description?: string;
   status?: StatutPaiement;
+  montant_recu?: number;
+  monnaie_rendue?: number;
 }
 
 export interface FactureUpdate {

@@ -105,6 +105,8 @@ export interface Paiement {
   date_paiement: string;
   statut: StatutPaiement;
   employe_id: number | null;
+  montant_recu: number;
+  monnaie_rendue: number;
 }
 
 export interface Facture {
