@@ -1,8 +1,9 @@
 "use client"
 
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 
@@ -21,111 +22,88 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { employes } from "@/lib/api/employes"
+import { useToast } from "@/components/ui/use-toast"
+import type { Role } from "@/lib/api/types/employee.types"
 
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
-  }),
-  email: z.string().email({
-    message: "Please enter a valid email address.",
-  }),
-  phone: z.string().min(10, {
-    message: "Phone number must be at least 10 digits.",
-  }),
-  role: z.string().min(1, {
-    message: "Please select a role.",
-  }),
-  department: z.string().min(1, {
-    message: "Please select a department.",
-  }),
-  joinDate: z.date({
-    required_error: "Please select a join date.",
-  }),
-  status: z.string().min(1, {
-    message: "Please select a status.",
-  }),
-  address: z.string().min(5, {
-    message: "Address must be at least 5 characters.",
-  }),
-  emergencyContact: z.string().min(5, {
-    message: "Emergency contact must be at least 5 characters.",
-  }),
+const employeeSchema = z.object({
+  nom: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+  prenom: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
+  email: z.string().email("Email invalide"),
+  telephone: z.string().min(10, "Le numéro de téléphone doit contenir au moins 10 caractères"),
+  role: z.enum(["admin", "accueil", "caisse", "graphiste"]),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+  date_embauche: z.string().min(1, "La date d'embauche est requise"),
   notes: z.string().optional(),
 })
 
-type EmployeeFormValues = z.infer<typeof formSchema>
+type EmployeeFormValues = z.infer<typeof employeeSchema>
 
-interface AddEmployeeDialogProps {
+export interface AddEmployeeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddEmployee: (
-    employee: Omit<
-      {
-        id: number
-        name: string
-        email: string
-        phone: string
-        role: string
-        department: string
-        joinDate: string
-        status: string
-      },
-      "id"
-    >,
-  ) => void
+  onSuccess: () => void
 }
 
-export function AddEmployeeDialog({ open, onOpenChange, onAddEmployee }: AddEmployeeDialogProps) {
+export function AddEmployeeDialog({ open, onOpenChange, onSuccess }: AddEmployeeDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { toast } = useToast()
+
   const form = useForm<EmployeeFormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(employeeSchema),
     defaultValues: {
-      name: "",
+      nom: "",
+      prenom: "",
       email: "",
-      phone: "",
-      role: "",
-      department: "",
-      joinDate: new Date(),
-      status: "Active",
-      address: "",
-      emergencyContact: "",
+      telephone: "",
+      role: "accueil",
+      password: "",
+      date_embauche: new Date().toISOString().split("T")[0],
       notes: "",
     },
   })
 
-  function onSubmit(values: EmployeeFormValues) {
-    onAddEmployee({
-      name: values.name,
-      email: values.email,
-      phone: values.phone,
-      role: values.role,
-      department: values.department,
-      joinDate: values.joinDate.toISOString().split("T")[0],
-      status: values.status,
-    })
-    onOpenChange(false)
-    form.reset()
+  const onSubmit = async (data: EmployeeFormValues) => {
+    try {
+      setIsSubmitting(true)
+      await employes.create(data)
+      toast({
+        title: "Succès",
+        description: "Employé ajouté avec succès",
+      })
+      form.reset()
+      onSuccess()
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ajouter l'employé",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add New Employee</DialogTitle>
+          <DialogTitle>Ajouter un employé</DialogTitle>
           <DialogDescription>
-            Enter the employee details below. Required fields are marked with an asterisk.
+            Remplissez les informations pour ajouter un nouvel employé.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="nom"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name*</FormLabel>
+                    <FormLabel>Nom</FormLabel>
                     <FormControl>
-                      <Input placeholder="Jane Smith" {...field} />
+                      <Input placeholder="Nom" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -133,184 +111,131 @@ export function AddEmployeeDialog({ open, onOpenChange, onAddEmployee }: AddEmpl
               />
               <FormField
                 control={form.control}
-                name="email"
+                name="prenom"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email*</FormLabel>
+                    <FormLabel>Prénom</FormLabel>
                     <FormControl>
-                      <Input placeholder="jane.smith@example.com" type="email" {...field} />
+                      <Input placeholder="Prénom" {...field} />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="(555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Reception">Reception</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="Designer">Designer</SelectItem>
-                        <SelectItem value="Accountant">Accountant</SelectItem>
-                        <SelectItem value="HR Specialist">HR Specialist</SelectItem>
-                        <SelectItem value="Developer">Developer</SelectItem>
-                        <SelectItem value="Sales Representative">Sales Representative</SelectItem>
-                        <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a department" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Front Office">Front Office</SelectItem>
-                        <SelectItem value="Operations">Operations</SelectItem>
-                        <SelectItem value="Creative">Creative</SelectItem>
-                        <SelectItem value="Finance">Finance</SelectItem>
-                        <SelectItem value="Human Resources">Human Resources</SelectItem>
-                        <SelectItem value="IT">IT</SelectItem>
-                        <SelectItem value="Sales">Sales</SelectItem>
-                        <SelectItem value="Logistics">Logistics</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="joinDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Join Date*</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${
-                              !field.value ? "text-muted-foreground" : ""
-                            }`}
-                          >
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="On Leave">On Leave</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Address*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St, City, State, Zip" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="emergencyContact"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Emergency Contact*</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe, (555) 987-6543, Relation: Spouse" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Additional information about the employee"
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Any additional information about this employee</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="email@exemple.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="telephone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Téléphone</FormLabel>
+                  <FormControl>
+                    <Input placeholder="0123456789" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Rôle</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un rôle" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="admin">Administrateur</SelectItem>
+                      <SelectItem value="accueil">Accueil</SelectItem>
+                      <SelectItem value="caisse">Caisse</SelectItem>
+                      <SelectItem value="graphiste">Graphiste</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Mot de passe</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="Mot de passe" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Le mot de passe doit contenir au moins 8 caractères.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="date_embauche"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date d'embauche</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Notes additionnelles" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Informations supplémentaires (optionnel).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+              >
+                Annuler
               </Button>
-              <Button type="submit">Save Employee</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Ajout en cours..." : "Ajouter"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

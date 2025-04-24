@@ -1,6 +1,6 @@
 // lib/api/types.ts
 export type Role = 'admin' | 'accueil' | 'caisse' | 'graphiste';
-export type StatutCommande = 'reçue' | 'payée' | 'en_impression' | 'terminée' | 'livrée';
+export type StatutCommande = 'reçue' | 'payée' | 'en_impression' | 'terminée' | 'livrée' | 'annulée';
 export type MethodePaiement = 'espèces' | 'Flooz' | 'Mixx';
 export type StatutPaiement = 'en_attente' | 'validé' | 'échoué';
 export type TypeMouvement = 'entrée' | 'sortie' | 'ajustement';

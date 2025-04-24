@@ -2,55 +2,44 @@
 import api from './config';
 import type { 
   Employe, 
-  JournalActivite,
-  SessionUtilisateur 
-} from './types';
+  EmployeCreate,
+  EmployeUpdate,
+  EmployeFilters,
+  EmployeNotes,
+  Role,
+  EmployePermissions
+} from './types/employee.types';
+import type { JournalActivite } from './types';
+import { 
+  parseEmployeNotes, 
+  stringifyEmployeNotes 
+} from './types/employee.types';
 
-// Types pour les requêtes
-export interface EmployeCreate {
-  nom: string;
-  prenom: string;
-  email: string;
-  telephone: string;
-  role: 'admin' | 'accueil' | 'caisse' | 'graphiste';
-  password: string;
-  date_embauche: string;
-}
-
-export interface EmployeUpdate extends Partial<Omit<EmployeCreate, 'password'>> {
-  password?: string;
-}
-
-// Types pour les réponses
-export interface EmployeResponse {
+// Types pour les réponses API
+interface EmployeResponse {
   success: boolean;
   message: string;
   data?: Employe;
 }
 
-export interface EmployesResponse {
+interface EmployesResponse {
   success: boolean;
   message: string;
   data: Employe[];
+  total?: number;
+  page?: number;
+  limit?: number;
 }
 
-export interface JournalActiviteResponse {
+interface JournalActiviteResponse {
   success: boolean;
   message: string;
   data: JournalActivite[];
 }
 
-// Types pour les filtres
-export interface EmployeFilters {
-  role?: string;
-  est_actif?: boolean;
-  search?: string;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-// Fonctions pour les employés
+// API client pour les employés
 export const employes = {
+  // Fonctions principales correspondant aux routes backend
   getAll: async (filters?: EmployeFilters): Promise<Employe[]> => {
     const response = await api.get<EmployesResponse>('/employe', { 
       params: filters 
@@ -101,20 +90,9 @@ export const employes = {
     return response.data.data;
   },
 
-  // Journal des activités
   getActivities: async (id: number): Promise<JournalActivite[]> => {
     const response = await api.get<JournalActiviteResponse>(`/employe/${id}/activities`);
     return response.data.data;
-  },
-
-  // Sessions
-  getActiveSessions: async (id: number): Promise<SessionUtilisateur[]> => {
-    const response = await api.get<{ data: SessionUtilisateur[] }>(`/employe/${id}/sessions`);
-    return response.data.data;
-  },
-
-  terminateSession: async (sessionId: number): Promise<void> => {
-    await api.delete(`/employe/sessions/${sessionId}`);
   },
 
   // Fonctions utilitaires
@@ -122,8 +100,8 @@ export const employes = {
     return `${employe.prenom} ${employe.nom}`;
   },
 
-  getRoleLabel: (role: string): string => {
-    const roleMap: Record<string, string> = {
+  getRoleLabel: (role: Role): string => {
+    const roleMap: Record<Role, string> = {
       'admin': 'Administrateur',
       'accueil': 'Accueil',
       'caisse': 'Caisse',
@@ -136,20 +114,63 @@ export const employes = {
     return employe.est_actif;
   },
 
-  canManageUsers: (role: string): boolean => {
-    return role === 'admin';
+  // Fonctions de permissions
+  hasPermission: (role: Role, permission: keyof EmployePermissions): boolean => {
+    const permissionsMap: Record<Role, EmployePermissions> = {
+      admin: {
+        canManageOrders: true,
+        canManageClients: true,
+        canManageInventory: true,
+        canManageEmployees: true,
+        canViewReports: true,
+        canManagePayments: true,
+        canManageRemises: true,
+        canManageSettings: true
+      },
+      caisse: {
+        canManageOrders: true,
+        canManageClients: true,
+        canManageInventory: false,
+        canManageEmployees: false,
+        canViewReports: true,
+        canManagePayments: true,
+        canManageRemises: true,
+        canManageSettings: false
+      },
+      accueil: {
+        canManageOrders: true,
+        canManageClients: true,
+        canManageInventory: true,
+        canManageEmployees: false,
+        canViewReports: false,
+        canManagePayments: false,
+        canManageRemises: false,
+        canManageSettings: false
+      },
+      graphiste: {
+        canManageOrders: true,
+        canManageClients: false,
+        canManageInventory: true,
+        canManageEmployees: false,
+        canViewReports: false,
+        canManagePayments: false,
+        canManageRemises: false,
+        canManageSettings: false
+      }
+    };
+
+    return permissionsMap[role][permission] || false;
   },
 
-  canManageOrders: (role: string): boolean => {
-    return ['admin', 'accueil', 'caisse', 'graphiste'].includes(role);
+  // Fonctions pour gérer les notes JSON
+  getNotes: (employe: Employe): EmployeNotes => {
+    return parseEmployeNotes(employe.notes);
   },
 
-  canManagePayments: (role: string): boolean => {
-    return ['admin', 'caisse'].includes(role);
-  },
-
-  canManageMaterials: (role: string): boolean => {
-    return ['admin', 'accueil', 'graphiste'].includes(role);
+  updateNotes: async (id: number, notes: EmployeNotes): Promise<Employe> => {
+    return employes.update(id, {
+      notes: stringifyEmployeNotes(notes)
+    });
   }
 };
 
