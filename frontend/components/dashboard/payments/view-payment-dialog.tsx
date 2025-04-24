@@ -12,42 +12,26 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Receipt } from "lucide-react"
+import { DownloadPDFButton } from "@/components/ui/download-pdf-button"
+import { Paiement, Facture } from "@/lib/api/types"
+import { paiements } from "@/lib/api/paiements"
 
 interface ViewPaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  payment: {
-    id: string
-    clientName: string
-    date: string
-    amount: number
-    method: string
-    status: string
-    email?: string
-    address?: string
-    description?: string
-    invoiceNumber?: string
-  }
-  onViewReceipt: () => void
+  payment: Paiement
+  facture: Facture
 }
 
-export function ViewPaymentDialog({ open, onOpenChange, payment, onViewReceipt }: ViewPaymentDialogProps) {
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount)
-  }
-
+export function ViewPaymentDialog({ open, onOpenChange, payment, facture }: ViewPaymentDialogProps) {
   // Status badge color mapping
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "completed":
+      case "validé":
         return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "processing":
+      case "en_attente":
         return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "failed":
+      case "échoué":
         return "bg-red-100 text-red-800 hover:bg-red-100"
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-100"
@@ -57,11 +41,11 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, onViewReceipt }
   // Method badge color mapping
   const getMethodColor = (method: string) => {
     switch (method.toLowerCase()) {
-      case "credit card":
+      case "flooz":
         return "bg-purple-100 text-purple-800 hover:bg-purple-100"
-      case "bank transfer":
+      case "mixx":
         return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "cash":
+      case "espèces":
         return "bg-green-100 text-green-800 hover:bg-green-100"
       default:
         return "bg-gray-100 text-gray-800 hover:bg-gray-100"
@@ -72,18 +56,18 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, onViewReceipt }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Payment Details</DialogTitle>
-          <DialogDescription>Detailed information about payment {payment.id}</DialogDescription>
+          <DialogTitle>Détails du paiement</DialogTitle>
+          <DialogDescription>Informations détaillées sur le paiement #{payment.paiement_id}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold">{payment.id}</h3>
-              <p className="text-sm text-muted-foreground">Client: {payment.clientName}</p>
+              <h3 className="text-lg font-semibold">Paiement #{payment.paiement_id}</h3>
+              <p className="text-sm text-muted-foreground">Commande #{payment.commande_id}</p>
             </div>
-            <Badge variant="outline" className={getStatusColor(payment.status)}>
-              {payment.status}
+            <Badge variant="outline" className={getStatusColor(payment.statut)}>
+              {paiements.getStatusLabel(payment.statut)}
             </Badge>
           </div>
 
@@ -92,32 +76,48 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, onViewReceipt }
           <div className="grid grid-cols-2 gap-4">
             <div>
               <h4 className="text-sm font-medium text-muted-foreground">Date</h4>
-              <p>{new Date(payment.date).toLocaleDateString()}</p>
+              <p>{new Date(payment.date_paiement).toLocaleDateString()}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Amount</h4>
-              <p className="font-semibold">{formatCurrency(payment.amount)}</p>
+              <h4 className="text-sm font-medium text-muted-foreground">Montant</h4>
+              <p className="font-semibold">{paiements.formatAmount(payment.montant)}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Method</h4>
-              <Badge variant="outline" className={getMethodColor(payment.method)}>
-                {payment.method}
+              <h4 className="text-sm font-medium text-muted-foreground">Méthode</h4>
+              <Badge variant="outline" className={getMethodColor(payment.methode)}>
+                {paiements.getPaymentMethodLabel(payment.methode)}
               </Badge>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
-              <Badge variant="outline" className={getStatusColor(payment.status)}>
-                {payment.status}
+              <h4 className="text-sm font-medium text-muted-foreground">Statut</h4>
+              <Badge variant="outline" className={getStatusColor(payment.statut)}>
+                {paiements.getStatusLabel(payment.statut)}
               </Badge>
             </div>
           </div>
 
-          {payment.description && (
+          {payment.methode === "espèces" && (
+            <>
+              <Separator />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">Montant reçu</h4>
+                  <p className="font-semibold">{paiements.formatAmount(payment.montant_recu)}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">Monnaie rendue</h4>
+                  <p className="font-semibold">{paiements.formatAmount(payment.monnaie_rendue)}</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {payment.reference_transaction && (
             <>
               <Separator />
               <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Description</h4>
-                <p className="text-sm">{payment.description}</p>
+                <h4 className="text-sm font-medium text-muted-foreground">Référence transaction</h4>
+                <p className="text-sm">{payment.reference_transaction}</p>
               </div>
             </>
           )}
@@ -125,12 +125,14 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, onViewReceipt }
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            Fermer
           </Button>
-          <Button onClick={onViewReceipt}>
-            <Receipt className="mr-2 h-4 w-4" />
-            View Receipt
-          </Button>
+          <DownloadPDFButton
+            paiement={payment}
+            facture={facture}
+            variant="default"
+            size="default"
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

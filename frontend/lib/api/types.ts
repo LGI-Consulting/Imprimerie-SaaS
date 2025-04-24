@@ -164,3 +164,13 @@ export interface JournalActivite {
   entite_affectee: string | null;
   entite_id: number | null;
 }
+
+export interface PaiementsFilter {
+  status?: StatutPaiement;
+  method?: MethodePaiement;
+  startDate?: string;
+  endDate?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  searchTerm?: string;
+}

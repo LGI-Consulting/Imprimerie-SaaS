@@ -62,6 +62,27 @@ export interface FacturesResponse {
   data: Facture[];
 }
 
+export interface PaiementsFilter {
+  status?: StatutPaiement;
+  method?: MethodePaiement;
+  startDate?: string;
+  endDate?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  search?: string;
+}
+
+export interface PaiementsPaginatedResponse {
+  success: boolean;
+  data: {
+    payments: Paiement[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+}
+
 // Fonctions pour les paiements
 export const paiements = {
   getAll: async (): Promise<Paiement[]> => {
@@ -159,7 +180,34 @@ export const paiements = {
       'échoué': 'Annulé',
     };
     return statusMap[status] || status;
-  }
+  },
+
+  getPaginated: async (
+    page: number = 1,
+    pageSize: number = 10,
+    filters?: PaiementsFilter
+  ): Promise<{
+    payments: Paiement[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> => {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      pageSize: pageSize.toString(),
+      ...(filters?.status && { status: filters.status }),
+      ...(filters?.method && { method: filters.method }),
+      ...(filters?.startDate && { startDate: filters.startDate }),
+      ...(filters?.endDate && { endDate: filters.endDate }),
+      ...(filters?.minAmount && { minAmount: filters.minAmount.toString() }),
+      ...(filters?.maxAmount && { maxAmount: filters.maxAmount.toString() }),
+      ...(filters?.search && { search: filters.search }),
+    });
+
+    const response = await api.get<PaiementsPaginatedResponse>(`/paiement/paginated?${queryParams}`);
+    return response.data.data;
+  },
 };
 
 export default paiements;
