@@ -19,15 +19,15 @@ const router = express.Router();
 
 router.use(verifyToken);
 
-router.post('/pay',checkRole(["caisse", "admin"]), createPayment);
-router.get('/pay',checkRole(["caisse", "admin"]), getAllPayments);
-router.get('/pay/:id',checkRole(["caisse", "admin"]), getPaymentById);
-router.put('/pay/:id',checkRole(["caisse", "admin"]), updatePayment);
-router.delete('/getPay/:id',checkRole(["admin"]), deletePayment);
+router.post('/paiement',checkRole(["caisse", "admin"]), createPayment);
+router.get('/paiement',checkRole(["caisse", "admin"]), getAllPayments);
+router.get('/paiement/:id',checkRole(["caisse", "admin"]), getPaymentById);
+router.put('/paiement/:id',checkRole(["caisse", "admin"]), updatePayment);
+router.delete('/paiement/:id',checkRole(["admin"]), deletePayment);
 
-router.get('/invoice',checkRole(["caisse", "admin"]), getAllFactures);
-router.get('/invoice/:id',checkRole(["caisse", "admin"]), getFactureById);
-router.put('/invoice/:id',checkRole(["caisse", "admin"]), updateFacture);
-router.delete('/invoice/:id',checkRole(["admin"]), deleteFacture);
+router.get('/facture',checkRole(["caisse", "admin"]), getAllFactures);
+router.get('/facture/:id',checkRole(["caisse", "admin"]), getFactureById);
+router.put('/facture/:id',checkRole(["caisse", "admin"]), updateFacture);
+router.delete('/facture/:id',checkRole(["admin"]), deleteFacture);
 
 export default router;
