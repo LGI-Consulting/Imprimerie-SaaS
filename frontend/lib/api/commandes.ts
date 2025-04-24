@@ -5,8 +5,10 @@ import type {
   DetailCommande, 
   PrintFile, 
   Client, 
-  Materiau 
+  Materiau,
+  Remise 
 } from './types';
+import { remises } from './remises';
 
 // Types pour les requêtes
 export interface CommandeCreate {
@@ -28,6 +30,7 @@ export interface CommandeCreate {
   commentaires?: string;
   est_commande_speciale?: boolean;
   files?: File[];
+  code_remise?: string;
 }
 
 export interface CommandeUpdate extends Partial<Omit<CommandeCreate, 'clientInfo'>> {
@@ -65,6 +68,7 @@ export interface CommandeFilters {
   materiau_id?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  code_remise?: string;
 }
 
 // Fonctions pour les commandes
@@ -102,12 +106,35 @@ export const commandes = {
   create: async (data: CommandeCreate): Promise<CommandeResponse['data']> => {
     const formData = new FormData();
     
+    // Vérifier et appliquer la remise si un code est fourni
+    let remiseInfo = null;
+    if (data.code_remise) {
+      try {
+        const remise = await remises.getByCode(data.code_remise);
+        if (remise && remises.isValid(remise)) {
+          remiseInfo = {
+            remise_id: remise.remise_id,
+            code_remise: remise.code_remise,
+            type: remise.type,
+            valeur: remise.valeur
+          };
+        }
+      } catch (error) {
+        console.warn('Code de remise invalide:', error);
+      }
+    }
+
     // Ajouter les données de base
     Object.entries(data).forEach(([key, value]) => {
       if (key !== 'files') {
         formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
       }
     });
+
+    // Ajouter les informations de remise
+    if (remiseInfo) {
+      formData.append('remise', JSON.stringify(remiseInfo));
+    }
 
     // Ajouter les fichiers
     if (data.files) {
@@ -131,12 +158,35 @@ export const commandes = {
   update: async (id: number, data: CommandeUpdate): Promise<CommandeResponse['data']> => {
     const formData = new FormData();
     
+    // Vérifier et appliquer la remise si un code est fourni
+    let remiseInfo = null;
+    if (data.code_remise) {
+      try {
+        const remise = await remises.getByCode(data.code_remise);
+        if (remise && remises.isValid(remise)) {
+          remiseInfo = {
+            remise_id: remise.remise_id,
+            code_remise: remise.code_remise,
+            type: remise.type,
+            valeur: remise.valeur
+          };
+        }
+      } catch (error) {
+        console.warn('Code de remise invalide:', error);
+      }
+    }
+
     // Ajouter les données de base
     Object.entries(data).forEach(([key, value]) => {
       if (key !== 'files' && value !== undefined) {
         formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
       }
     });
+
+    // Ajouter les informations de remise
+    if (remiseInfo) {
+      formData.append('remise', JSON.stringify(remiseInfo));
+    }
 
     // Ajouter les fichiers
     if (data.files) {
@@ -179,6 +229,18 @@ export const commandes = {
 
   isCompleted: (commande: Commande): boolean => {
     return commande.statut === 'terminée' || commande.statut === 'livrée';
+  },
+
+  // Ajouter une fonction utilitaire pour calculer le total avec remise
+  calculateTotalWithDiscount: (details: DetailCommande[], remise?: Remise): number => {
+    const total = details.reduce((sum, detail) => sum + detail.sous_total, 0);
+    
+    if (!remise || !remises.isValid(remise)) {
+      return total;
+    }
+
+    const discountAmount = remises.calculateDiscount(total, remise);
+    return Math.max(0, total - discountAmount);
   }
 };
 

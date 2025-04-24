@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { Eye, MoreHorizontal, FileText, Trash2, Edit2, Printer } from "lucide-react"
+import { Eye, MoreHorizontal, FileText, Trash2, Edit2, Printer, Percent, Euro } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -46,7 +46,7 @@ import { toast } from "sonner"
 import { commandes, CommandeFilters, CommandesResponse } from "@/lib/api/commandes"
 import { clients } from "@/lib/api/client"
 import { formatCurrency } from "@/lib/api/utils"
-import { Commande, StatutCommande, Client, DetailCommande } from "@/lib/api/types"
+import { Commande, StatutCommande, Client, DetailCommande, Remise, TypeRemise } from "@/lib/api/types"
 import { ViewOrderDialog } from "./view-order-dialog"
 import { AddOrderDialog } from "./add-order-dialog"
 
@@ -54,9 +54,16 @@ interface OrdersListProps {
   userRole?: string
 }
 
-interface CommandeWithDetails extends Commande {
+// Définir une interface pour la commande avec détails
+interface CommandeWithDetails extends Omit<Commande, 'remise'> {
   client: Client;
   details: DetailCommande[];
+  remise?: {
+    type: TypeRemise;
+    valeur: number;
+    code?: string;
+    montant_applique: number;
+  };
 }
 
 const ITEMS_PER_PAGE = 10
@@ -85,20 +92,38 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
     client_id: undefined,
     materiau_id: undefined,
     sortBy: "date_creation",
-    sortOrder: "desc"
+    sortOrder: "desc",
+    code_remise: undefined
   })
 
   // Charger les commandes
   const loadOrders = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await commandes.getAll(filters)
+      // Convertir les filtres étendus en filtres standard pour l'API
+      const apiFilters: CommandeFilters = {
+        ...filters,
+        // Exclure code_remise des filtres envoyés à l'API
+        code_remise: undefined
+      }
+      
+      const response = await commandes.getAll(apiFilters)
       const commandesData = response as unknown as (Commande & { client: Client })[]
-      setOrders(commandesData.map(cmd => ({
+      
+      // Filtrer par code de remise côté client si nécessaire
+      let filteredData = commandesData
+      if (filters.code_remise) {
+        filteredData = commandesData.filter(cmd => 
+          cmd.remise && cmd.remise.code === filters.code_remise
+        )
+      }
+      
+      setOrders(filteredData.map(cmd => ({
         ...cmd,
-        details: [] // Les détails seront chargés lors de l'ouverture du dialog
+        details: [], // Les détails seront chargés lors de l'ouverture du dialog
+        remise: cmd.remise
       })))
-      setTotalPages(Math.ceil(commandesData.length / ITEMS_PER_PAGE))
+      setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
     } catch (err) {
       console.error("Erreur lors du chargement des commandes:", err)
       setError("Impossible de charger les commandes")
@@ -172,6 +197,52 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
     return <Badge variant={config.variant as any}>{config.label}</Badge>
   }
 
+  // Calculer le sous-total d'une commande
+  const calculateSubtotal = (details: DetailCommande[]) => {
+    return details.reduce((total, detail) => {
+      return total + (detail.quantite * detail.prix_unitaire)
+    }, 0)
+  }
+
+  // Calculer la remise d'une commande
+  const calculateDiscount = (order: CommandeWithDetails) => {
+    if (!order.remise || !order.details.length) return 0
+    
+    const subtotal = calculateSubtotal(order.details)
+    
+    if (order.remise.type === 'pourcentage') {
+      return (subtotal * order.remise.valeur) / 100
+    } else {
+      return Math.min(subtotal, order.remise.valeur)
+    }
+  }
+
+  // Calculer le total d'une commande après remise
+  const calculateTotal = (order: CommandeWithDetails) => {
+    const subtotal = calculateSubtotal(order.details)
+    const discount = calculateDiscount(order)
+    return subtotal - discount
+  }
+
+  // Rendu de la remise
+  const renderRemise = (order: CommandeWithDetails) => {
+    if (!order.remise) return null
+
+    return (
+      <div className="flex items-center gap-1 text-green-600">
+        {order.remise.type === 'pourcentage' ? (
+          <Percent className="h-4 w-4" />
+        ) : (
+          <Euro className="h-4 w-4" />
+        )}
+        <span>-{formatCurrency(calculateDiscount(order))}</span>
+        <Badge variant="outline" className="ml-1 text-xs">
+          {order.remise.code}
+        </Badge>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtres */}
@@ -200,6 +271,12 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
               ))}
             </SelectContent>
           </Select>
+          <Input
+            placeholder="Code de remise"
+            value={filters.code_remise || ""}
+            onChange={(e) => handleFilterChange("code_remise", e.target.value || undefined)}
+            className="max-w-sm"
+          />
         </div>
         <Button onClick={() => setAddDialogOpen(true)}>
           Nouvelle commande
@@ -215,6 +292,8 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
               <TableHead>Client</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Statut</TableHead>
+              <TableHead className="text-right">Sous-total</TableHead>
+              <TableHead className="text-right">Remise</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -229,20 +308,22 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
                   <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-[50px]" /></TableCell>
                 </TableRow>
               ))
             ) : error ? (
               // État d'erreur
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {error}
                 </TableCell>
               </TableRow>
             ) : orders.length === 0 ? (
               // État vide
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Aucune commande trouvée
                 </TableCell>
               </TableRow>
@@ -257,7 +338,13 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
                   </TableCell>
                   <TableCell>{renderStatus(order.statut)}</TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(commandes.calculateTotal(order.details))}
+                    {formatCurrency(calculateSubtotal(order.details))}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {renderRemise(order)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatCurrency(calculateTotal(order))}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -343,7 +430,25 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
       {/* Dialogs */}
       {selectedOrder && (
         <ViewOrderDialog
-          order={selectedOrder}
+          order={{
+            ...selectedOrder,
+            details: selectedOrder.details,
+            clientInfo: {
+              prenom: selectedOrder.client.prenom,
+              nom: selectedOrder.client.nom,
+              telephone: selectedOrder.client.telephone,
+              email: selectedOrder.client.email || undefined,
+              adresse: selectedOrder.client.adresse || undefined
+            },
+            created_at: selectedOrder.date_creation,
+            id: selectedOrder.commande_id,
+            remise: selectedOrder.remise ? {
+              type: selectedOrder.remise.type,
+              valeur: selectedOrder.remise.valeur,
+              code: selectedOrder.remise.code || undefined,
+              montant_applique: calculateDiscount(selectedOrder)
+            } : undefined
+          }}
           open={viewDialogOpen}
           onOpenChange={setViewDialogOpen}
         />

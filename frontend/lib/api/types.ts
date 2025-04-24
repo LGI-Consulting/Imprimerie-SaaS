@@ -64,6 +64,12 @@ export interface Commande {
   employe_caisse_id: number | null;
   employe_graphiste_id: number | null;
   est_commande_speciale: boolean;
+  remise?: {
+    type: TypeRemise;
+    valeur: number;
+    code?: string;
+    montant_applique: number;
+  };
 }
 
 export interface PrintFile {

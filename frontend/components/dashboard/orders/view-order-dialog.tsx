@@ -16,11 +16,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Commande } from "@/lib/api/types/commande"
+import { Card, CardContent } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Commande, TypeRemise, DetailCommande } from "@/lib/api/types"
 import { formatDate } from "@/lib/utils"
+import { formatCurrency } from "@/lib/api/utils"
 
 interface ViewOrderDialogProps {
-  order: Commande
+  order: Commande & {
+    details: DetailCommande[];
+    clientInfo: {
+      prenom: string;
+      nom: string;
+      telephone: string;
+      email?: string;
+      adresse?: string;
+    };
+    created_at: string;
+    id: number;
+    remise?: {
+      type: 'pourcentage' | 'montant_fixe';
+      valeur: number;
+      code?: string;
+      montant_applique: number;
+    };
+  }
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -45,18 +65,33 @@ export function ViewOrderDialog({
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-    }).format(amount)
+  const calculateSubtotal = () => {
+    return order.details.reduce(
+      (total: number, item: DetailCommande) => total + item.quantite * item.prix_unitaire,
+      0
+    )
+  }
+
+  const calculateDiscount = () => {
+    if (!order.remise) return 0
+    
+    const subtotal = calculateSubtotal()
+    
+    if (order.remise.type === 'pourcentage') {
+      return (subtotal * order.remise.valeur) / 100
+    } else {
+      return order.remise.valeur
+    }
   }
 
   const calculateTotal = () => {
-    return order.details.reduce(
-      (total, item) => total + item.quantite * item.prix_unitaire,
-      0
-    )
+    const subtotal = calculateSubtotal()
+    const discount = calculateDiscount()
+    return subtotal - discount
+  }
+
+  const getRemiseTypeLabel = (type: TypeRemise) => {
+    return type === 'pourcentage' ? '%' : '€'
   }
 
   return (
@@ -81,11 +116,10 @@ export function ViewOrderDialog({
               <p>Date: {formatDate(order.created_at)}</p>
               <p>
                 Statut:{" "}
-                <Badge className={getStatusColor(order.status)}>
-                  {order.status}
+                <Badge className={getStatusColor(order.statut)}>
+                  {order.statut}
                 </Badge>
               </p>
-              <p>Total: {formatCurrency(calculateTotal())}</p>
             </div>
           </div>
 
@@ -123,6 +157,46 @@ export function ViewOrderDialog({
               </TableBody>
             </Table>
           </div>
+
+          {/* Section des remises */}
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="font-semibold mb-4">Récapitulatif et remises</h3>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Sous-total</span>
+                  <span>{formatCurrency(calculateSubtotal())}</span>
+                </div>
+                
+                {order.remise && (
+                  <div className="flex justify-between text-green-600">
+                    <div className="flex items-center gap-2">
+                      <span>Remise</span>
+                      <Badge variant="outline" className="text-green-600 border-green-600">
+                        {order.remise.type === 'pourcentage' 
+                          ? `${order.remise.valeur}%` 
+                          : formatCurrency(order.remise.valeur)}
+                      </Badge>
+                      {order.remise.code && (
+                        <span className="text-xs text-muted-foreground">
+                          (Code: {order.remise.code})
+                        </span>
+                      )}
+                    </div>
+                    <span>-{formatCurrency(calculateDiscount())}</span>
+                  </div>
+                )}
+                
+                <Separator className="my-2" />
+                
+                <div className="flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span>{formatCurrency(calculateTotal())}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {order.commentaires && (
             <div>

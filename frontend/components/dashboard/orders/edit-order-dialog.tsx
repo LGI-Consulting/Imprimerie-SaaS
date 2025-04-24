@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { CalendarIcon, Plus, Trash2, Upload, X } from "lucide-react"
+import { CalendarIcon, Plus, Trash2, Upload, X, Percent, Euro } from "lucide-react"
 import { format } from "date-fns"
 import { useDropzone } from 'react-dropzone'
 
@@ -27,10 +27,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 
 import { useAuth } from "@/lib/context/auth-context"
 import { commandes } from "@/lib/api/commandes"
 import { materiaux } from "@/lib/api/materiaux"
+import { remises } from "@/lib/api/remises"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -39,7 +42,8 @@ import type {
   DetailCommande, 
   Materiau, 
   PrintFile, 
-  StatutCommande 
+  StatutCommande,
+  Remise
 } from "@/lib/api/types"
 
 // Form schema
@@ -50,6 +54,7 @@ const formSchema = z.object({
   priorite: z.number().min(0).max(5).default(1),
   est_commande_speciale: z.boolean().default(false),
   commentaires: z.string().optional(),
+  code_remise: z.string().optional(),
   details: z
     .array(
       z.object({
@@ -91,7 +96,7 @@ interface EditOrderDialogProps {
     })[]
     files: PrintFile[]
   }
-  onSuccess?: (updatedOrder: Commande) => void
+  onSuccess?: (updatedOrder: Commande | undefined) => void
 }
 
 export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOrderDialogProps) {
@@ -101,6 +106,9 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
   const [existingFiles, setExistingFiles] = useState<PrintFile[]>(order.files || [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentRemise, setCurrentRemise] = useState<Remise | null>(null)
+  const [remiseError, setRemiseError] = useState<string | null>(null)
+  const [isCheckingRemise, setIsCheckingRemise] = useState(false)
 
   // Charger la liste des matériaux
   useEffect(() => {
@@ -142,6 +150,7 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
       priorite: order.priorite,
       est_commande_speciale: order.est_commande_speciale,
       commentaires: order.commentaires || "",
+      code_remise: order.remise?.code || "",
       details: order.details.map(detail => ({
         materiau_id: detail.materiau_id || 0,
         quantite: detail.quantite,
@@ -190,12 +199,74 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
     }
   }
 
-  // Calculer le total
-  const calculateTotal = () => {
+  // Calculer le sous-total
+  const calculateSubtotal = () => {
     const details = form.getValues("details")
     return details.reduce((total, detail) => {
       return total + (detail.quantite * detail.prix_unitaire)
     }, 0)
+  }
+
+  // Calculer la remise
+  const calculateDiscount = () => {
+    if (!currentRemise) return 0
+    
+    const subtotal = calculateSubtotal()
+    
+    if (currentRemise.type === 'pourcentage') {
+      return (subtotal * currentRemise.valeur) / 100
+    } else {
+      return Math.min(subtotal, currentRemise.valeur)
+    }
+  }
+
+  // Calculer le total
+  const calculateTotal = () => {
+    const subtotal = calculateSubtotal()
+    const discount = calculateDiscount()
+    return subtotal - discount
+  }
+
+  // Vérifier le code de remise
+  const checkRemiseCode = async (code: string) => {
+    if (!code) {
+      setCurrentRemise(null)
+      setRemiseError(null)
+      return
+    }
+
+    setIsCheckingRemise(true)
+    setRemiseError(null)
+
+    try {
+      const remise = await remises.getByCode(code)
+      if (remise && remises.isValid(remise)) {
+        setCurrentRemise(remise)
+        toast.success(`Remise de ${remises.formatDiscount(remise)} appliquée`)
+      } else {
+        setCurrentRemise(null)
+        setRemiseError("Code de remise invalide ou expiré")
+      }
+    } catch (error) {
+      console.error("Erreur lors de la vérification du code de remise:", error)
+      setCurrentRemise(null)
+      setRemiseError("Code de remise non trouvé")
+    } finally {
+      setIsCheckingRemise(false)
+    }
+  }
+
+  // Gérer le changement de code de remise
+  const handleRemiseCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const code = e.target.value
+    form.setValue("code_remise", code)
+    
+    if (code) {
+      checkRemiseCode(code)
+    } else {
+      setCurrentRemise(null)
+      setRemiseError(null)
+    }
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -210,6 +281,7 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
         commentaires: values.commentaires,
         details: values.details,
         files: selectedFiles,
+        code_remise: values.code_remise,
       }
 
       const updatedOrder = await commandes.update(order.commande_id, updateData)
@@ -233,6 +305,7 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
   const canEditStatus = hasRole(['admin', 'caisse'])
   const canEditDetails = hasRole(['admin', 'graphiste'])
   const canEditPriority = hasRole(['admin', 'caisse'])
+  const canEditRemise = hasRole(['admin', 'caisse'])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -264,129 +337,128 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
                 <h3 className="font-semibold mb-2">Informations de commande</h3>
                 <p>Date: {formatDate(order.date_creation)}</p>
                 <p>Numéro: {order.numero_commande}</p>
-                <p>Total: {formatCurrency(calculateTotal())}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {canEditStatus && (
-                <FormField
-                  control={form.control}
-                  name="statut"
-                  render={({ field }) => (
-                    <FormItem>
+              <FormField
+                control={form.control}
+                name="statut"
+                render={({ field }) => (
+                  <FormItem>
                       <FormLabel>Statut*</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
+                      <FormControl>
+                        <SelectTrigger>
                             <SelectValue placeholder="Sélectionner un statut" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
                           <SelectItem value="reçue">Reçue</SelectItem>
                           <SelectItem value="payée">Payée</SelectItem>
                           <SelectItem value="en_impression">En impression</SelectItem>
                           <SelectItem value="terminée">Terminée</SelectItem>
                           <SelectItem value="livrée">Livrée</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               )}
 
               {canEditPriority && (
-                <FormField
-                  control={form.control}
-                  name="priorite"
-                  render={({ field }) => (
-                    <FormItem>
+              <FormField
+                control={form.control}
+                name="priorite"
+                render={({ field }) => (
+                  <FormItem>
                       <FormLabel>Priorité</FormLabel>
                       <Select
                         onValueChange={(value) => field.onChange(parseInt(value))}
                         value={field.value.toString()}
                       >
-                        <FormControl>
-                          <SelectTrigger>
+                      <FormControl>
+                        <SelectTrigger>
                             <SelectValue placeholder="Sélectionner la priorité" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
                           <SelectItem value="1">Normale</SelectItem>
                           <SelectItem value="2">Moyenne</SelectItem>
                           <SelectItem value="3">Haute</SelectItem>
                           <SelectItem value="4">Très haute</SelectItem>
                           <SelectItem value="5">Urgente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               )}
             </div>
 
             {canEditDetails && (
-              <div>
+            <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-medium">Articles*</h3>
                   <Button type="button" variant="outline" size="sm" onClick={addDetail}>
                     <Plus className="mr-1 h-4 w-4" /> Ajouter un article
-                  </Button>
-                </div>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+                </Button>
+              </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                         <TableHead>Matériau</TableHead>
                         <TableHead>Dimensions</TableHead>
                         <TableHead>Quantité</TableHead>
                         <TableHead>Prix unitaire</TableHead>
-                        <TableHead>Total</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                      <TableHead>Total</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                       {form.getValues("details").map((_, index) => (
                         <TableRow key={index}>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
+                        <TableCell>
+                          <FormField
+                            control={form.control}
                               name={`details.${index}.materiau_id`}
-                              render={({ field }) => (
-                                <FormItem className="space-y-0 mb-0">
-                                  <Select
-                                    onValueChange={(value) => {
+                            render={({ field }) => (
+                              <FormItem className="space-y-0 mb-0">
+                                <Select
+                                  onValueChange={(value) => {
                                       field.onChange(parseInt(value))
                                       updatePrixUnitaire(index, parseInt(value))
-                                    }}
+                                  }}
                                     value={field.value.toString()}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className="w-[180px]">
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="w-[180px]">
                                         <SelectValue placeholder="Sélectionner" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
                                       {materiauList.map((materiau) => (
                                         <SelectItem 
                                           key={materiau.materiau_id} 
                                           value={materiau.materiau_id.toString()}
                                         >
                                           {materiau.nom || materiau.type_materiau}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormField
+                            control={form.control}
                               name={`details.${index}.dimensions`}
                               render={({ field }) => (
                                 <FormItem className="space-y-0 mb-0">
@@ -402,9 +474,9 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
                             <FormField
                               control={form.control}
                               name={`details.${index}.quantite`}
-                              render={({ field }) => (
-                                <FormItem className="space-y-0 mb-0">
-                                  <FormControl>
+                            render={({ field }) => (
+                              <FormItem className="space-y-0 mb-0">
+                                <FormControl>
                                     <Input 
                                       type="number" 
                                       min="1" 
@@ -412,61 +484,179 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
                                       {...field}
                                       onChange={e => field.onChange(parseInt(e.target.value))}
                                     />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormField
+                            control={form.control}
                               name={`details.${index}.prix_unitaire`}
-                              render={({ field }) => (
-                                <FormItem className="space-y-0 mb-0">
-                                  <FormControl>
+                            render={({ field }) => (
+                              <FormItem className="space-y-0 mb-0">
+                                <FormControl>
                                     <Input 
                                       className="w-[100px]" 
                                       {...field}
                                       value={field.value}
                                       onChange={e => field.onChange(parseFloat(e.target.value))}
                                     />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell>
                             {formatCurrency(
                               form.getValues(`details.${index}.quantite`) *
                               form.getValues(`details.${index}.prix_unitaire`)
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                               onClick={() => removeDetail(index)}
                               disabled={form.getValues("details").length <= 1}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-right font-medium">
-                          Total:
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
-                        <TableCell className="font-bold">{formatCurrency(calculateTotal())}</TableCell>
-                        <TableCell></TableCell>
                       </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                    <TableRow>
+                        <TableCell colSpan={4} className="text-right font-medium">
+                        Total:
+                      </TableCell>
+                        <TableCell className="font-bold">{formatCurrency(calculateSubtotal())}</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </div>
+              </div>
+            )}
+
+            {/* Section des remises */}
+            {canEditRemise && (
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="font-semibold mb-4">Remises</h3>
+                  
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="code_remise"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Code de remise</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input 
+                                placeholder="Entrez un code de remise" 
+                                {...field} 
+                                onChange={handleRemiseCodeChange}
+                                disabled={isCheckingRemise}
+                              />
+                            </FormControl>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              onClick={() => checkRemiseCode(field.value || "")}
+                              disabled={isCheckingRemise || !field.value}
+                            >
+                              {isCheckingRemise ? "Vérification..." : "Vérifier"}
+                            </Button>
+                          </div>
+                          {remiseError && (
+                            <p className="text-sm text-red-500 mt-1">{remiseError}</p>
+                          )}
+                          <FormDescription>
+                            Entrez un code de remise valide pour appliquer une réduction à la commande.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {currentRemise && (
+                      <div className="bg-green-50 p-4 rounded-md border border-green-200">
+                        <div className="flex items-center gap-2 text-green-700 mb-2">
+                          {currentRemise.type === 'pourcentage' ? (
+                            <Percent className="h-5 w-5" />
+                          ) : (
+                            <Euro className="h-5 w-5" />
+                          )}
+                          <h4 className="font-medium">Remise appliquée</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-500">Type:</span>
+                            <Badge variant="outline" className="ml-2">
+                              {currentRemise.type === 'pourcentage' ? 'Pourcentage' : 'Montant fixe'}
+                            </Badge>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Valeur:</span>
+                            <span className="ml-2 font-medium">
+                              {currentRemise.type === 'pourcentage' 
+                                ? `${currentRemise.valeur}%` 
+                                : formatCurrency(currentRemise.valeur)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Code:</span>
+                            <span className="ml-2 font-medium">{currentRemise.code_remise}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Montant remisé:</span>
+                            <span className="ml-2 font-medium text-green-600">
+                              -{formatCurrency(calculateDiscount())}
+                            </span>
+                          </div>
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="mt-2 text-red-500 hover:text-red-700"
+                          onClick={() => {
+                            form.setValue("code_remise", "")
+                            setCurrentRemise(null)
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-1" /> Supprimer la remise
+                        </Button>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2 mt-4">
+                      <div className="flex justify-between">
+                        <span>Sous-total</span>
+                        <span>{formatCurrency(calculateSubtotal())}</span>
+                      </div>
+                      
+                      {currentRemise && (
+                        <div className="flex justify-between text-green-600">
+                          <span>Remise</span>
+                          <span>-{formatCurrency(calculateDiscount())}</span>
+                        </div>
+                      )}
+                      
+                      <Separator className="my-2" />
+                      
+                      <div className="flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span>{formatCurrency(calculateTotal())}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             <div className="space-y-4">
@@ -518,11 +708,11 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+              )}
+            </div>
 
-              <FormField
-                control={form.control}
+            <FormField
+              control={form.control}
                 name="est_commande_speciale"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
@@ -542,21 +732,21 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
               <FormField
                 control={form.control}
                 name="commentaires"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
                       <Textarea 
                         placeholder="Informations supplémentaires sur la commande" 
                         className="resize-none" 
                         {...field} 
                       />
-                    </FormControl>
+                  </FormControl>
                     <FormDescription>Toute information additionnelle concernant cette commande</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             </div>
 
             <DialogFooter>

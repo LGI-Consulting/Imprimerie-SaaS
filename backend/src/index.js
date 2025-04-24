@@ -20,7 +20,7 @@ import commandeRoutes from './routes/commande.routes.js';
 import materiauRoutes from './routes/materiau.routes.js';
 import paiementRoutes from './routes/paiement.routes.js';
 import employeRoutes from './routes/employe.routes.js';
-//import remiseRoutes from './routes/remise.routes.js';
+import remiseRoutes from './routes/remise.routes.js';
 //import { swaggerUi, specs } from './config/swagger.js';
 
 /**
@@ -55,7 +55,7 @@ app.use('/api/commandes', commandeRoutes);
 app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
 app.use('/api/employe', employeRoutes);
-//app.use('/api/remise', remiseRoutes);
+app.use('/api/remises', remiseRoutes);
 
 
 // Route de base

@@ -195,6 +195,51 @@ export const createOrder = async (req, res) => {
       options
     } = req.body;
 
+    // Validation des données d'entrée
+    if (!clientInfo || !materialType || !width || !length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: "Informations manquantes. Veuillez fournir clientInfo, materialType, width et length."
+      });
+    }
+
+    // Validation des informations client
+    if (!clientInfo.nom || !clientInfo.prenom || !clientInfo.telephone) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: "Informations client incomplètes. Veuillez fournir nom, prenom et telephone."
+      });
+    }
+
+    // Validation des dimensions
+    const requestedWidth = parseFloat(width);
+    const requestedLength = parseFloat(length);
+    
+    if (isNaN(requestedWidth) || requestedWidth <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: "La largeur doit être un nombre positif"
+      });
+    }
+    
+    if (isNaN(requestedLength) || requestedLength <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: "La longueur doit être un nombre positif"
+      });
+    }
+
+    const widthWithMargin = requestedWidth + 5;
+    const numExemplaires = parseInt(quantity, 10) || 1;
+
+    // Vérifier que la quantité est valide
+    if (numExemplaires <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `La quantité doit être supérieure à zéro`
+      });
+    }
+
     const employeId = req.user.employe_id;
 
     // Gérer les informations client
@@ -222,19 +267,6 @@ export const createOrder = async (req, res) => {
       ]);
 
       clientId = clientResult.rows[0].client_id;
-    }
-
-    const requestedWidth = parseFloat(width);
-    const requestedLength = parseFloat(length);
-    const widthWithMargin = requestedWidth + 5;
-    const numExemplaires = parseInt(quantity, 10) || 1;
-
-    // Vérifier que la quantité est valide
-    if (numExemplaires <= 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        message: `La quantité doit être supérieure à zéro`
-      });
     }
 
     // Étape 1: récupérer infos matériau
@@ -296,6 +328,12 @@ export const createOrder = async (req, res) => {
     // Quantité totale de matériau nécessaire pour tous les exemplaires
     const totalAreaSqM = areaSqM * numExemplaires;
 
+    // Vérifier si c'est une commande spéciale (Direction Générale)
+    const isCommandeSpeciale = clientInfo.nom && 
+                              clientInfo.nom.toLowerCase().startsWith('d-g') && 
+                              clientInfo.prenom && 
+                              clientInfo.prenom.toLowerCase().startsWith('d-g');
+
     // Étape 5: appliquer les options
     let additionalCosts = 0;
     let optionsDetails = [];
@@ -335,8 +373,78 @@ export const createOrder = async (req, res) => {
     }
 
     // Prix unitaire par exemplaire et prix total pour tous les exemplaires
-    const unitPrice = basePrice + (additionalCosts / numExemplaires);
-    const totalPrice = basePrice * numExemplaires + additionalCosts;
+    let unitPrice = basePrice + (additionalCosts / numExemplaires);
+    let totalPrice = basePrice * numExemplaires + additionalCosts;
+
+    // Vérifier et appliquer les remises disponibles
+    let remiseAmount = 0;
+    let remiseDetails = null;
+
+    // Vérifier les remises par code si fourni
+    if (req.body.code_remise) {
+      const remiseQuery = `
+        SELECT * FROM remises 
+        WHERE code_remise = $1 
+        AND est_active = true 
+        AND (date_fin IS NULL OR date_fin > CURRENT_TIMESTAMP)
+      `;
+      const remiseResult = await client.query(remiseQuery, [req.body.code_remise]);
+      
+      if (remiseResult.rows.length > 0) {
+        const remise = remiseResult.rows[0];
+        remiseDetails = {
+          type: remise.type,
+          valeur: remise.valeur,
+          code: remise.code_remise
+        };
+        
+        if (remise.type === 'pourcentage') {
+          remiseAmount = (totalPrice * remise.valeur) / 100;
+        } else {
+          remiseAmount = remise.valeur;
+        }
+      }
+    }
+
+    // Vérifier les remises par client si c'est un client existant
+    if (!remiseDetails && clientId) {
+      const clientRemiseQuery = `
+        SELECT * FROM remises 
+        WHERE client_id = $1 
+        AND est_active = true 
+        AND (date_fin IS NULL OR date_fin > CURRENT_TIMESTAMP)
+        ORDER BY date_debut DESC
+        LIMIT 1
+      `;
+      const clientRemiseResult = await client.query(clientRemiseQuery, [clientId]);
+      
+      if (clientRemiseResult.rows.length > 0) {
+        const remise = clientRemiseResult.rows[0];
+        remiseDetails = {
+          type: remise.type,
+          valeur: remise.valeur,
+          code: remise.code_remise
+        };
+        
+        if (remise.type === 'pourcentage') {
+          remiseAmount = (totalPrice * remise.valeur) / 100;
+        } else {
+          remiseAmount = remise.valeur;
+        }
+      }
+    }
+
+    // Appliquer la remise au prix total
+    if (remiseAmount > 0) {
+      totalPrice = Math.max(0, totalPrice - remiseAmount);
+      unitPrice = totalPrice / numExemplaires;
+    }
+
+    // Appliquer le prix à 0 pour les commandes spéciales (Direction Générale)
+    if (isCommandeSpeciale) {
+      unitPrice = 0;
+      totalPrice = 0;
+    }
 
     // Générer un numéro de commande
     const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -360,13 +468,7 @@ export const createOrder = async (req, res) => {
       1, // Priorité par défaut à 1
       options?.comments || null, // Commentaires, ou null si non spécifié
       employeId,
-      false, // est_commande_speciale par défaut à false
-      clientId,
-      "reçue",
-      1,
-      options?.comments || null,
-      employeId,
-      false,
+      isCommandeSpeciale, // Utiliser la valeur déterminée
       orderNumberValue
     ]);
 
@@ -449,53 +551,78 @@ export const createOrder = async (req, res) => {
       `Commande ${orderNumberValue}: ${numExemplaires} exemplaires de ${materialType} ${requestedWidth}x${requestedLength}cm`
     ]);
 
-        // Insérer les fichiers d'impression
-        if (req.body.files && req.body.files.length > 0) {
-          for (const file of req.body.files) {
-              const { file_name, file_path } = file;
-              if (file_name && file_path) {
-                  const insertPrintFileQuery = `
-                      INSERT INTO print_files (commande_id, file_name, file_path)
-                      VALUES ($1, $2, $3)
-                  `;
-                  await client.query(insertPrintFileQuery, [
-                      commandeId,
-                      file_name,
-                      file_path
-                  ]);
-              }
-          }
+    // Insérer les fichiers d'impression
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const insertPrintFileQuery = `
+          INSERT INTO print_files (
+            commande_id, file_name, file_path, file_size, mime_type, uploaded_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `;
+        
+        await client.query(insertPrintFileQuery, [
+          commandeId,
+          file.originalname,
+          file.path,
+          file.size,
+          file.mimetype,
+          employeId
+        ]);
       }
-
+    } else if (req.body.files && Array.isArray(req.body.files) && req.body.files.length > 0) {
+      // Fallback pour les fichiers envoyés via JSON
+      for (const file of req.body.files) {
+        if (file.file_name && file.file_path) {
+          const insertPrintFileQuery = `
+            INSERT INTO print_files (
+              commande_id, file_name, file_path, file_size, mime_type, uploaded_by
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+          `;
+          
+          await client.query(insertPrintFileQuery, [
+            commandeId,
+            file.file_name,
+            file.file_path,
+            file.file_size || null,
+            file.mime_type || null,
+            employeId
+          ]);
+        }
+      }
+    }
 
     await client.query('COMMIT');
 
     res.status(201).json({
-      message: "Commande créée avec succès",
-      commande_id: commandeId,
-      numero_commande: orderNumberValue,
-      details: {
-        client: clientId,
-        materiau: {
-          type: materialType,
-          largeur_selectionnee: selectedWidth
-        },
-        dimensions: {
-          largeur: requestedWidth,
-          longueur: requestedLength,
-          surface_unitaire: areaSqM,
-          surface_totale: totalAreaSqM
-        },
-        exemplaires: numExemplaires,
-        prix: {
-          base_unitaire: basePrice,
-          base_total: basePrice * numExemplaires,
-          options_unitaire: additionalCosts / numExemplaires,
-          options_total: additionalCosts,
-          unitaire: unitPrice,
-          total: totalPrice
-        },
-        options: optionsDetails
+      success: true,
+      message: 'Commande créée avec succès',
+      data: {
+        commande_id: commandeId,
+        client_id: clientId,
+        date_commande: new Date(),
+        statut: "reçue",
+        prix_unitaire: unitPrice,
+        prix_total: totalPrice,
+        remise: remiseDetails ? {
+          type: remiseDetails.type,
+          valeur: remiseDetails.valeur,
+          code: remiseDetails.code,
+          montant_applique: remiseAmount
+        } : null,
+        est_commande_speciale: isCommandeSpeciale,
+        fichiers_impression: req.files && req.files.length > 0 ? req.files.map(file => ({
+          file_name: file.originalname,
+          file_path: file.path,
+          file_size: file.size,
+          mime_type: file.mimetype
+        })) : req.body.files && Array.isArray(req.body.files) && req.body.files.length > 0 ? req.body.files.map(file => ({
+          file_name: file.file_name,
+          file_path: file.file_path,
+          file_size: file.file_size,
+          mime_type: file.mime_type
+        })) : []
       }
     });
 

@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { commandes } from "@/lib/api/commandes"
 import { materiaux } from "@/lib/api/materiaux"
-import {  Materiau } from "@/lib/api/types"
+import { Materiau, Remise } from "@/lib/api/types"
 import { CommandeCreate } from "@/lib/api/commandes"
 import { formatCurrency } from "@/lib/api/utils"
 import { toast } from "sonner"
@@ -34,6 +34,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { remises } from "@/lib/api/remises"
 
 // Form schema
 const formSchema = z.object({
@@ -57,6 +58,7 @@ const formSchema = z.object({
   commentaires: z.string().optional(),
   est_commande_speciale: z.boolean().default(false),
   priorite: z.number().min(0).max(5).default(1),
+  code_remise: z.string().optional(),
 })
 
 interface AddOrderDialogProps {
@@ -74,6 +76,8 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
   const [clientsList, setClientsList] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [remiseInfo, setRemiseInfo] = useState<Remise | null>(null)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -171,10 +175,60 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
 
   // Calculer le total
   const calculateTotal = () => {
-    const details = form.getValues("details")
-    return details.reduce((total, detail) => {
-      return total + (detail.quantite * detail.prix_unitaire)
-    }, 0)
+    const total = form.getValues("details").reduce((sum, detail) => {
+      return sum + (detail.quantite * detail.prix_unitaire);
+    }, 0);
+    return total;
+  }
+
+  // Vérifier le code remise
+  const checkDiscountCode = useCallback(async (code: string) => {
+    if (!code) {
+      setRemiseInfo(null)
+      return
+    }
+
+    try {
+      const remise = await remises.getByCode(code)
+      if (remise && remises.isValid(remise)) {
+        setRemiseInfo(remise)
+        toast.success("Code de remise appliqué")
+      } else {
+        setRemiseInfo(null)
+        toast.error("Code de remise invalide ou expiré")
+      }
+    } catch (error) {
+      console.error("Erreur lors de la vérification du code remise:", error)
+      setRemiseInfo(null)
+      toast.error("Code de remise invalide")
+    }
+  }, [])
+
+  // Écouter les changements de code remise
+  useEffect(() => {
+    const code = form.watch("code_remise")
+    if (code) {
+      checkDiscountCode(code)
+    } else {
+      setRemiseInfo(null)
+    }
+  }, [form.watch("code_remise"), checkDiscountCode])
+
+  // Calculer le total avec remise
+  const calculateTotalWithDiscount = () => {
+    const total = calculateTotal()
+    if (!remiseInfo) return total
+    
+    const discountAmount = remises.calculateDiscount(total, remiseInfo)
+    return Math.max(0, total - discountAmount)
+  }
+
+  // Calculer le montant de la remise
+  const calculateDiscountAmount = () => {
+    const total = calculateTotal()
+    if (!remiseInfo) return 0
+    
+    return remises.calculateDiscount(total, remiseInfo)
   }
 
   // Rechercher des clients
@@ -208,34 +262,33 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     })
   }
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsSubmitting(true)
-    setError(null)
-
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
+      setLoading(true)
+      setError(null)
+
       const orderData = {
-        clientInfo: values.clientInfo,
-        details: values.details,
-        commentaires: values.commentaires || '',
-        est_commande_speciale: values.est_commande_speciale,
-        priorite: values.priorite,
+        ...data,
         files: selectedFiles,
+        remise: remiseInfo ? {
+          remise_id: remiseInfo.remise_id,
+          code_remise: remiseInfo.code_remise,
+          type: remiseInfo.type,
+          valeur: remiseInfo.valeur
+        } : undefined
       }
 
-      const result = await commandes.create(orderData)
+      const response = await commandes.create(orderData)
       
-      if (onSuccess) {
-        onSuccess(result)
-      }
-      
+      toast.success("Commande créée avec succès")
+      onSuccess?.(response)
       onOpenChange(false)
-      form.reset()
-      setSelectedFiles([])
-    } catch (error) {
-      console.error("Erreur lors de la création de la commande:", error)
-      setError("Erreur lors de la création de la commande")
+    } catch (err) {
+      console.error("Erreur lors de la création de la commande:", err)
+      setError(err instanceof Error ? err.message : "Une erreur est survenue")
+      toast.error("Erreur lors de la création de la commande")
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
   }
 
@@ -612,6 +665,26 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
 
               <FormField
                 control={form.control}
+                name="code_remise"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Code de remise</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Entrez le code de remise"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Le code de remise sera appliqué automatiquement si valide
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="commentaires"
                 render={({ field }) => (
                   <FormItem>
@@ -628,6 +701,25 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between">
+                <span>Prix total:</span>
+                <span>{formatCurrency(calculateTotal())}</span>
+              </div>
+              {remiseInfo && (
+                <>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Remise ({remises.formatDiscount(remiseInfo)}):</span>
+                    <span>-{formatCurrency(calculateDiscountAmount())}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>Total après remise:</span>
+                    <span>{formatCurrency(calculateTotalWithDiscount())}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             <DialogFooter>
