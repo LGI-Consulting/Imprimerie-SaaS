@@ -64,6 +64,11 @@ interface MaterialsData {
   materialCosts: Record<string, number>;
 }
 
+// Type étendu pour le stock avec la propriété isLow
+interface StockWithAlert extends StockMateriau {
+  isLow: boolean;
+}
+
 // Cache pour les données agrégées
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -526,17 +531,31 @@ export const reportsData = {
         // Calculer les niveaux de stock
         const stockLevels = await Promise.all(
           allMaterials.map(async (material: Materiau) => {
-            const stockLevel = 0; // Remplacer par la logique réelle
+            // Récupérer les stocks pour ce matériau
+            const stocks = await Promise.all(
+              (material as any).stocks.map(async (stock: StockMateriau) => {
+                const stockInfo = await materiaux.getStockById(stock.stock_id);
+                return {
+                  ...stockInfo,
+                  isLow: materiaux.isLowStock(stockInfo.quantite_en_stock, stockInfo.seuil_alerte)
+                } as StockWithAlert;
+              })
+            );
+
+            // Calculer le niveau total de stock
+            const totalStock = stocks.reduce((sum: number, stock: StockWithAlert) => sum + stock.quantite_en_stock, 0);
+            
             return {
               material,
-              level: stockLevel,
+              level: totalStock,
+              stocks
             };
           })
         );
 
         // Identifier les alertes de stock bas
         const lowStockAlerts = stockLevels.filter(
-          ({ material, level }) => level <= 0 // Remplacer par la logique réelle
+          ({ material, stocks }) => stocks.some((stock: StockWithAlert) => stock.isLow)
         );
 
         // Calculer les coûts des matériaux
