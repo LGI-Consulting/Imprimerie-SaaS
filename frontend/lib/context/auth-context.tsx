@@ -3,13 +3,19 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import auth from "@/lib/api/auth";
-import type { Employe, SessionUtilisateur } from "@/lib/api/types";
 import { ROUTES } from "@/constants/routes"
 import { UserRole } from "@/types/roles"
 
+interface UserData {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string;
+  role: string;
+}
+
 interface AuthContextType {
-  user: Omit<Employe, "password"> | null;
-  session: SessionUtilisateur | null;
+  user: UserData | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -38,8 +44,7 @@ function getDefaultRouteForRole(role: UserRole): string {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<Omit<Employe, "password"> | null>(null);
-  const [session, setSession] = useState<SessionUtilisateur | null>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -50,30 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      // Vérifier le token dans localStorage ou les cookies
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setIsAuthenticated(false);
-        setUser(null);
-        return;
-      }
-
-      // Appeler l'API pour vérifier le token
-      const response = await fetch("/api/auth/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-        localStorage.removeItem("token");
-      }
+      const userData = await auth.getProfile();
+      setUser(userData as UserData);
+      setIsAuthenticated(true);
     } catch (error) {
       console.error("Erreur lors de la vérification de l'authentification:", error);
       setUser(null);
@@ -85,23 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Échec de la connexion");
+      const response = await auth.login({ email, password });
+      if (response.data) {
+        const { token, ...userData } = response.data;
+        setUser(userData);
+        setIsAuthenticated(true);
+        router.push(getDefaultRouteForRole(userData.role as UserRole));
       }
-
-      const { token, user } = await response.json();
-      localStorage.setItem("token", token);
-      setUser(user);
-      setIsAuthenticated(true);
-      router.push(getDefaultRouteForRole(user.role as UserRole));
     } catch (error) {
       console.error("Erreur lors de la connexion:", error);
       throw error;
@@ -112,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await auth.logout();
       setUser(null);
-      setSession(null);
+      setIsAuthenticated(false);
       router.push("/login");
     } catch (error) {
       console.error("Erreur de déconnexion:", error);
@@ -123,8 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = async () => {
     try {
       const response = await auth.refreshToken();
-      if (response.data?.session) {
-        setSession(response.data.session);
+      if (response.data) {
+        const { token, ...userData } = response.data;
+        setUser(userData);
       }
     } catch (error) {
       console.error("Erreur de rafraîchissement de session:", error);
@@ -139,7 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     user,
-    session,
     isLoading,
     isAuthenticated,
     login,
