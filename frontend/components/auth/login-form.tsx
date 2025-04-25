@@ -36,6 +36,7 @@ export function LoginForm() {
     setError(null)
 
     try {
+      console.log(values.email, values.password)
       await login(values.email, values.password)
     } catch (err) {
       setError("Email ou mot de passe incorrect. Veuillez réessayer.")
