@@ -39,9 +39,10 @@ interface RoleBasedLayoutProps {
     name: string
     logo: string
   }
+  permissions: any
 }
 
-export function RoleBasedLayout({ children, navigation, role, currentUser, currentTenant }: RoleBasedLayoutProps) {
+export function RoleBasedLayout({ children, navigation, role, currentUser, currentTenant, permissions }: RoleBasedLayoutProps) {
   const pathname = usePathname()
 
   return (
@@ -99,7 +100,15 @@ export function RoleBasedLayout({ children, navigation, role, currentUser, curre
         </Sidebar>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DashboardHeader onMenuClick={() => {}} currentUser={currentUser} currentTenant={currentTenant} />
+          <DashboardHeader
+            onMenuClick={() => {}}
+            userRole={role}
+            userName={currentUser.name}
+            currentUser={currentUser}
+            currentTenant={currentTenant}
+            role={role}
+            permissions={permissions}
+          />
 
           <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
         </div>

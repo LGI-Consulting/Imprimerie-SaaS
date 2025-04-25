@@ -19,15 +19,29 @@ interface HeaderProps {
   onMenuClick: () => void
   userRole: UserRole
   userName: string
+  currentUser: {
+    name: string
+    role: string
+    avatar: string
+  }
+  currentTenant: {
+    name: string
+    logo: string
+  }
+  role: UserRole
+  permissions: any
 }
 
 export function DashboardHeader({
   onMenuClick,
   userRole,
   userName,
+  currentUser,
+  currentTenant,
+  role,
+  permissions,
 }: HeaderProps) {
   const { logout } = useAuth()
-  const permissions = ROLE_PERMISSIONS[userRole]
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
