@@ -1,4 +1,4 @@
-import { pool } from '../config/db.js';
+import pool from "../config/db.js";
 
 // Créer une nouvelle remise
 export const createRemise = async (req, res) => {

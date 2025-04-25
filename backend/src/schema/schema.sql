@@ -83,7 +83,6 @@ CREATE TABLE details_commande (
     detail_id SERIAL PRIMARY KEY,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
     materiau_id INTEGER REFERENCES materiaux(materiau_id),
-    travail_id INTEGER REFERENCES travaux(travail_id),
     quantite DECIMAL(10, 2) NOT NULL,
     dimensions VARCHAR(100),
     prix_unitaire DECIMAL(10, 2) NOT NULL,
