@@ -53,6 +53,8 @@ import { useNotificationStore } from "@/lib/store/notifications"
 
 interface OrdersListProps {
   userRole?: string
+  onFileReject?: (orderId: number, fileName: string) => void
+  onStatusChange?: (orderId: number, newStatus: string) => void
 }
 
 // Définir une interface pour la commande avec détails
@@ -76,7 +78,11 @@ const STATUS_OPTIONS: { value: StatutCommande; label: string }[] = [
   { value: "livrée", label: "Livrée" },
 ]
 
-export function OrdersList({ userRole = "user" }: OrdersListProps) {
+export function OrdersList({ 
+  userRole = "user",
+  onFileReject,
+  onStatusChange
+}: OrdersListProps) {
   const router = useRouter()
   const { addNotification } = useNotificationStore()
   const [orders, setOrders] = useState<CommandeWithDetails[]>([])
@@ -317,6 +323,18 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
         </DropdownMenuContent>
       </DropdownMenu>
     )
+  }
+
+  const handleFileReject = (orderId: number, fileName: string) => {
+    if (onFileReject) {
+      onFileReject(orderId, fileName)
+    }
+  }
+
+  const handleStatusChange = (orderId: number, newStatus: string) => {
+    if (onStatusChange) {
+      onStatusChange(orderId, newStatus)
+    }
   }
 
   return (
