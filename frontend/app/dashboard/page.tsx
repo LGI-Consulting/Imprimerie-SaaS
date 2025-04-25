@@ -18,7 +18,6 @@ export default function DashboardPage() {
       caisse: ROUTES.CAISSE.BASE,
       graphiste: ROUTES.ATELIER.BASE,
       accueil: ROUTES.ACCUEIL.BASE,
-      stock: ROUTES.STOCK.BASE,
     }
 
     const redirectPath = redirectMap[user.role as UserRole]
