@@ -1,30 +1,69 @@
-import { redirect } from "next/navigation"
-import { DashboardNav } from "@/components/dashboard/nav"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { useAuth } from "@/lib/context/auth-context"
+import { UserRole, ROLE_PERMISSIONS } from "@/types/roles"
+import { ROUTES } from "@/constants/routes"
+import { employes } from "@/lib/api/employes"
 
-export default function DashboardLayout({
-  children,
-}: {
+interface DashboardLayoutProps {
   children: React.ReactNode
-}) {
-  const { isAuthenticated, isLoading } = useAuth()
+}
 
-  if (isLoading) {
-    return <div>Chargement...</div>
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const router = useRouter()
+  const { user, isLoading, isAuthenticated } = useAuth()
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push(ROUTES.LOGIN)
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  if (isLoading || !isAuthenticated || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
   }
 
-  if (!isAuthenticated) {
-    redirect("/login")
+  // S'assurer que l'utilisateur a un rôle valide
+  const userRole = user.role as UserRole
+  const userPermissions = ROLE_PERMISSIONS[userRole]
+
+  if (!userPermissions) {
+    router.push(ROUTES.LOGIN)
+    return null
   }
+
+  // Obtenir le nom complet de l'employé
+  const userName = employes.getFullName(user)
 
   return (
     <div className="flex min-h-screen flex-col">
-      <DashboardNav />
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Tableau de bord</h2>
-        </div>
-        {children}
+      <DashboardHeader 
+        onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        userRole={userRole}
+        userName={userName}
+      />
+      
+      <div className="flex flex-1">
+        <DashboardSidebar 
+          isOpen={isSidebarOpen}
+          userRole={userRole}
+          permissions={userPermissions}
+        />
+        
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+          <div className="mx-auto max-w-7xl">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )

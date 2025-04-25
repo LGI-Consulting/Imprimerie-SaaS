@@ -4,6 +4,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import auth from "@/lib/api/auth";
 import type { Employe, SessionUtilisateur } from "@/lib/api/types";
+import { ROUTES } from "@/constants/routes"
+import { UserRole } from "@/types/roles"
 
 interface AuthContextType {
   user: Omit<Employe, "password"> | null;
@@ -18,51 +20,92 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Fonction pour obtenir la route de redirection par défaut selon le rôle
+function getDefaultRouteForRole(role: UserRole): string {
+  switch (role) {
+    case "admin":
+      return ROUTES.ADMIN.BASE;
+    case "caisse":
+      return ROUTES.CAISSE.BASE;
+    case "graphiste":
+      return ROUTES.ATELIER.BASE;
+    case "accueil":
+      return ROUTES.ACCUEIL.BASE;
+    case "stock":
+      return ROUTES.STOCK.BASE;
+    default:
+      return ROUTES.LOGIN;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<Omit<Employe, "password"> | null>(null);
   const [session, setSession] = useState<SessionUtilisateur | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Vérifier la session au chargement
+  // Vérifier le token au chargement
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (token) {
-          const userData = await auth.getProfile();
-          setUser(userData);
-          // Récupérer la session si nécessaire
-          const sessionResponse = await auth.refreshToken();
-          if (sessionResponse.data?.session) {
-            setSession(sessionResponse.data.session);
-          }
-        }
-      } catch (error) {
-        console.error("Erreur de session:", error);
-        localStorage.removeItem("token");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkSession();
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      // Vérifier le token dans localStorage ou les cookies
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setIsAuthenticated(false);
+        setUser(null);
+        return;
+      }
+
+      // Appeler l'API pour vérifier le token
+      const response = await fetch("/api/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem("token");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la vérification de l'authentification:", error);
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await auth.login({ email, password });
-      if (response.data?.user) {
-        setUser(response.data.user);
-        if (response.data.session) {
-          setSession(response.data.session);
-        }
-        router.push("/dashboard");
-      } else {
-        throw new Error(response.message);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de la connexion");
       }
+
+      const { token, user } = await response.json();
+      localStorage.setItem("token", token);
+      setUser(user);
+      setIsAuthenticated(true);
+      router.push(getDefaultRouteForRole(user.role as UserRole));
     } catch (error) {
-      console.error("Erreur de connexion:", error);
+      console.error("Erreur lors de la connexion:", error);
       throw error;
     }
   };
@@ -100,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     isLoading,
-    isAuthenticated: !!user,
+    isAuthenticated,
     login,
     logout,
     refreshSession,

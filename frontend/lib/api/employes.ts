@@ -96,7 +96,7 @@ export const employes = {
   },
 
   // Fonctions utilitaires
-  getFullName: (employe: Employe): string => {
+  getFullName: (employe: Pick<Employe, 'prenom' | 'nom'>): string => {
     return `${employe.prenom} ${employe.nom}`;
   },
 
