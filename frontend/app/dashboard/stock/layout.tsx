@@ -6,6 +6,7 @@ import { RoleBasedLayout } from "@/components/dashboard/role-based-layout"
 import { useAuth } from "@/lib/context/auth-context"
 import { ROUTES } from "@/constants/routes"
 import { employes } from "@/lib/api/employes"
+import { ROLE_PERMISSIONS } from "@/types/roles"
 import {
   Package,
   AlertTriangle,
@@ -68,6 +69,7 @@ export default function StockLayout({ children }: StockLayoutProps) {
         name: "Print Store Management",
         logo: "/logo.png",
       }}
+      permissions=""
     >
       {children}
     </RoleBasedLayout>

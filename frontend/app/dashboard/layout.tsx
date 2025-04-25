@@ -50,6 +50,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
         userRole={userRole}
         userName={userName}
+        currentUser={{
+          name: userName,
+          role: userRole,
+          avatar: "/placeholder.svg"
+        }}
+        currentTenant={{
+          name: "Imprimerie SaaS",
+          logo: "/logo.svg"
+        }}
+        role={userRole}
+        permissions={userPermissions}
       />
       
       <div className="flex flex-1">
