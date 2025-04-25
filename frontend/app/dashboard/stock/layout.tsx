@@ -41,16 +41,6 @@ export default function StockLayout({ children }: StockLayoutProps) {
       href: ROUTES.STOCK.INVENTORY,
       icon: Package,
     },
-    {
-      title: "Alertes",
-      href: ROUTES.STOCK.ALERTS,
-      icon: AlertTriangle,
-    },
-    {
-      title: "Statistiques",
-      href: ROUTES.STOCK.STATS,
-      icon: BarChart3,
-    },
   ]
 
   const userNotes = employes.getNotes(user as { notes?: string })

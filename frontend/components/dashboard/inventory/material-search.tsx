@@ -8,7 +8,7 @@ import { materiaux } from "@/lib/api/materiaux";
 import { StockAlertBadge } from "./stock-alert-badge";
 
 interface MaterialWithStocks extends Materiau {
-  stocks?: StockMateriau[];
+  stocks: StockMateriau[];
 }
 
 interface MaterialSearchProps {

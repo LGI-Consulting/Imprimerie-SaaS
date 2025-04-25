@@ -174,3 +174,7 @@ export interface PaiementsFilter {
   maxAmount?: number;
   searchTerm?: string;
 }
+
+export interface MaterialWithStocks extends Materiau {
+  stocks: StockMateriau[];
+}

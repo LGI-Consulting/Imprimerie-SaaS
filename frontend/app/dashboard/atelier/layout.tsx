@@ -43,16 +43,6 @@ export default function AtelierLayout({ children }: AtelierLayoutProps) {
       icon: LayoutDashboard,
     },
     {
-      title: "File d'attente",
-      href: ROUTES.ATELIER.QUEUE,
-      icon: Printer,
-    },
-    {
-      title: "Fichiers",
-      href: ROUTES.ATELIER.FILES,
-      icon: FileText,
-    },
-    {
       title: "Inventaire",
       href: ROUTES.STOCK.INVENTORY,
       icon: Package,

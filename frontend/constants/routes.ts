@@ -19,9 +19,6 @@ export const ROUTES = {
   },
   ATELIER: {
     BASE: "/dashboard/atelier",
-    QUEUE: "/dashboard/atelier/queue",
-    FILES: "/dashboard/atelier/files",
-    PRODUCTION: "/dashboard/atelier/production",
   },
   ACCUEIL: {
     BASE: "/dashboard/accueil",
@@ -31,8 +28,6 @@ export const ROUTES = {
   STOCK: {
     BASE: "/dashboard/stock",
     INVENTORY: "/dashboard/stock/inventory",
-    ALERTS: "/dashboard/stock/alerts",
-    STATS: "/dashboard/stock/stats",
   },
 };
 
@@ -54,9 +49,6 @@ export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   
   // Routes atelier
   [ROUTES.ATELIER.BASE]: ["admin", "graphiste"],
-  [ROUTES.ATELIER.QUEUE]: ["admin", "graphiste"],
-  [ROUTES.ATELIER.FILES]: ["admin", "graphiste"],
-  [ROUTES.ATELIER.PRODUCTION]: ["admin", "graphiste"],
   
   // Routes accueil
   [ROUTES.ACCUEIL.BASE]: ["admin", "accueil"],
@@ -66,5 +58,4 @@ export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   // Routes stock
   [ROUTES.STOCK.BASE]: ["admin", "accueil", "graphiste"],
   [ROUTES.STOCK.INVENTORY]: ["admin", "accueil", "graphiste"],
-  [ROUTES.STOCK.ALERTS]: ["admin", "accueil", "graphiste"],
 }; 

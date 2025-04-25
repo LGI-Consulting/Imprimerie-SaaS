@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { Materiau, StockMateriau } from "@/lib/api/types";
 
 interface MaterialWithStocks extends Materiau {
-  stocks?: StockMateriau[];
+  stocks: StockMateriau[];
 }
 
 interface MaterialCardProps {
