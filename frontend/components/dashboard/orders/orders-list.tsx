@@ -49,6 +49,7 @@ import { formatCurrency } from "@/lib/api/utils"
 import { Commande, StatutCommande, Client, DetailCommande, Remise, TypeRemise } from "@/lib/api/types"
 import { ViewOrderDialog } from "./view-order-dialog"
 import { AddOrderDialog } from "./add-order-dialog"
+import { useNotificationStore } from "@/lib/store/notifications"
 
 interface OrdersListProps {
   userRole?: string
@@ -77,6 +78,7 @@ const STATUS_OPTIONS: { value: StatutCommande; label: string }[] = [
 
 export function OrdersList({ userRole = "user" }: OrdersListProps) {
   const router = useRouter()
+  const { addNotification } = useNotificationStore()
   const [orders, setOrders] = useState<CommandeWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +168,19 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
     try {
       await commandes.delete(order.commande_id)
       toast.success("Commande supprimée avec succès")
+      
+      // Ajouter une notification pour la suppression
+      addNotification(
+        "order_complete",
+        {
+          orderId: order.commande_id.toString(),
+          orderNumber: order.numero_commande,
+          clientName: `${order.client.prenom} ${order.client.nom}`
+        },
+        "accueil",
+        "caisse"
+      )
+      
       loadOrders()
     } catch (err) {
       console.error("Erreur lors de la suppression:", err)
@@ -185,16 +200,17 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
 
   // Rendu du statut
   const renderStatus = (status: StatutCommande) => {
-    const statusConfig = {
+    const statusConfig: Record<StatutCommande, { label: string; variant: "default" | "destructive" | "secondary" | "outline" }> = {
       reçue: { label: "Reçue", variant: "default" },
-      payée: { label: "Payée", variant: "success" },
-      en_impression: { label: "En impression", variant: "warning" },
-      terminée: { label: "Terminée", variant: "success" },
-      livrée: { label: "Livrée", variant: "success" },
+      payée: { label: "Payée", variant: "secondary" },
+      en_impression: { label: "En impression", variant: "outline" },
+      terminée: { label: "Terminée", variant: "secondary" },
+      livrée: { label: "Livrée", variant: "secondary" },
+      annulée: { label: "Annulée", variant: "destructive" }
     }
 
     const config = statusConfig[status]
-    return <Badge variant={config.variant as any}>{config.label}</Badge>
+    return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
   // Calculer le sous-total d'une commande

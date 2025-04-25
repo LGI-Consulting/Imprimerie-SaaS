@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { Download, Eye, FileText, Image, File } from "lucide-react"
+import { Download, Eye, FileText, Image, File, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -30,9 +30,10 @@ import { formatFileSize } from "@/lib/api/utils"
 interface OrderFilesListProps {
   files: PrintFile[]
   loading?: boolean
+  onDelete?: (fileId: number) => void
 }
 
-export function OrderFilesList({ files, loading = false }: OrderFilesListProps) {
+export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesListProps) {
   const [previewFile, setPreviewFile] = useState<PrintFile | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -224,6 +225,15 @@ export function OrderFilesList({ files, loading = false }: OrderFilesListProps) 
                       >
                         <Download className="h-4 w-4" />
                       </Button>
+                      {onDelete && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => onDelete(file.print_file_id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Menu, LogOut } from "lucide-react"
 import { useAuth } from "@/lib/context/auth-context"
+import { NotificationCenter } from "./notifications/notification-center"
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -60,6 +61,8 @@ export function DashboardHeader({
         </div>
 
         <div className="flex flex-1 items-center justify-end space-x-4">
+          <NotificationCenter role={userRole} />
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

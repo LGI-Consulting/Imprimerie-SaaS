@@ -29,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { useAuth } from "@/lib/context/auth-context"
 import { commandes } from "@/lib/api/commandes"
@@ -36,6 +37,7 @@ import { materiaux } from "@/lib/api/materiaux"
 import { remises } from "@/lib/api/remises"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
+import { OrderFilesList } from "./order-files-list"
 
 import type { 
   Commande, 
@@ -109,6 +111,9 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
   const [currentRemise, setCurrentRemise] = useState<Remise | null>(null)
   const [remiseError, setRemiseError] = useState<string | null>(null)
   const [isCheckingRemise, setIsCheckingRemise] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [files, setFiles] = useState<PrintFile[]>(order.files || [])
+  const [uploading, setUploading] = useState(false)
 
   // Charger la liste des matériaux
   useEffect(() => {
@@ -269,19 +274,49 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
     }
   }
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsSubmitting(true)
-    setError(null)
+  const handleFileUpload = async (file: File) => {
+    setUploading(true)
+    try {
+      // TODO: Implémenter l'upload de fichier
+      const newFile: PrintFile = {
+        print_file_id: Math.random(),
+        file_name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+        date_upload: new Date().toISOString(),
+        file_path: URL.createObjectURL(file),
+        commande_id: order.commande_id,
+        description: "",
+        uploaded_by: user?.employe_id || 0
+      }
+      setFiles(prev => [...prev, newFile])
+    } catch (error) {
+      console.error("Erreur lors de l'upload du fichier:", error)
+    } finally {
+      setUploading(false)
+    }
+  }
 
+  const handleDeleteFile = async (fileId: number) => {
+    try {
+      // TODO: Implémenter la suppression du fichier
+      setFiles(prev => prev.filter(file => file.print_file_id !== fileId))
+    } catch (error) {
+      console.error("Erreur lors de la suppression du fichier:", error)
+    }
+  }
+
+  const handleSave = async () => {
+    setLoading(true)
     try {
       const updateData = {
-        statut: values.statut,
-        priorite: values.priorite,
-        est_commande_speciale: values.est_commande_speciale,
-        commentaires: values.commentaires,
-        details: values.details,
-        files: selectedFiles,
-        code_remise: values.code_remise,
+        statut: form.getValues("statut"),
+        priorite: form.getValues("priorite"),
+        est_commande_speciale: form.getValues("est_commande_speciale"),
+        commentaires: form.getValues("commentaires"),
+        details: form.getValues("details"),
+        files: files.map(file => new File([], file.file_name, { type: file.mime_type || '' })),
+        code_remise: form.getValues("code_remise"),
       }
 
       const updatedOrder = await commandes.update(order.commande_id, updateData)
@@ -297,7 +332,7 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
       setError("Erreur lors de la mise à jour de la commande")
       toast.error("Erreur lors de la mise à jour de la commande")
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
   }
 
@@ -309,456 +344,469 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px]">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Modifier la commande #{order.numero_commande}</DialogTitle>
+          <DialogTitle>Modifier la commande #{order.commande_id}</DialogTitle>
           <DialogDescription>
-            Modifiez les détails de la commande. Les champs marqués d'un astérisque sont obligatoires.
+            Modifiez les détails de la commande ci-dessous.
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        <Tabs defaultValue="details">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details">Détails de la commande</TabsTrigger>
+            <TabsTrigger value="files">Fichiers</TabsTrigger>
+          </TabsList>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <h3 className="font-semibold mb-2">Client</h3>
-                <p>{order.client.prenom} {order.client.nom}</p>
-                <p>{order.client.telephone}</p>
-                {order.client.email && <p>{order.client.email}</p>}
-                {order.client.adresse && <p>{order.client.adresse}</p>}
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">Informations de commande</h3>
-                <p>Date: {formatDate(order.date_creation)}</p>
-                <p>Numéro: {order.numero_commande}</p>
-              </div>
-            </div>
+          <TabsContent value="details">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSave)} className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <h3 className="font-semibold mb-2">Client</h3>
+                    <p>{order.client.prenom} {order.client.nom}</p>
+                    <p>{order.client.telephone}</p>
+                    {order.client.email && <p>{order.client.email}</p>}
+                    {order.client.adresse && <p>{order.client.adresse}</p>}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">Informations de commande</h3>
+                    <p>Date: {formatDate(order.date_creation)}</p>
+                    <p>Numéro: {order.numero_commande}</p>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {canEditStatus && (
-              <FormField
-                control={form.control}
-                name="statut"
-                render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Statut*</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                          <SelectItem value="reçue">Reçue</SelectItem>
-                          <SelectItem value="payée">Payée</SelectItem>
-                          <SelectItem value="en_impression">En impression</SelectItem>
-                          <SelectItem value="terminée">Terminée</SelectItem>
-                          <SelectItem value="livrée">Livrée</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              )}
-
-              {canEditPriority && (
-              <FormField
-                control={form.control}
-                name="priorite"
-                render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Priorité</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                        value={field.value.toString()}
-                      >
-                      <FormControl>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner la priorité" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                          <SelectItem value="1">Normale</SelectItem>
-                          <SelectItem value="2">Moyenne</SelectItem>
-                          <SelectItem value="3">Haute</SelectItem>
-                          <SelectItem value="4">Très haute</SelectItem>
-                          <SelectItem value="5">Urgente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              )}
-            </div>
-
-            {canEditDetails && (
-            <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium">Articles*</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={addDetail}>
-                    <Plus className="mr-1 h-4 w-4" /> Ajouter un article
-                </Button>
-              </div>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                        <TableHead>Matériau</TableHead>
-                        <TableHead>Dimensions</TableHead>
-                        <TableHead>Quantité</TableHead>
-                        <TableHead>Prix unitaire</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                      {form.getValues("details").map((_, index) => (
-                        <TableRow key={index}>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                              name={`details.${index}.materiau_id`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <Select
-                                  onValueChange={(value) => {
-                                      field.onChange(parseInt(value))
-                                      updatePrixUnitaire(index, parseInt(value))
-                                  }}
-                                    value={field.value.toString()}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Sélectionner" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      {materiauList.map((materiau) => (
-                                        <SelectItem 
-                                          key={materiau.materiau_id} 
-                                          value={materiau.materiau_id.toString()}
-                                        >
-                                          {materiau.nom || materiau.type_materiau}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                              name={`details.${index}.dimensions`}
-                              render={({ field }) => (
-                                <FormItem className="space-y-0 mb-0">
-                                  <FormControl>
-                                    <Input {...field} placeholder="LxH" className="w-[100px]" />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
-                              name={`details.${index}.quantite`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <FormControl>
-                                    <Input 
-                                      type="number" 
-                                      min="1" 
-                                      className="w-[80px]" 
-                                      {...field}
-                                      onChange={e => field.onChange(parseInt(e.target.value))}
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                              name={`details.${index}.prix_unitaire`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <FormControl>
-                                    <Input 
-                                      className="w-[100px]" 
-                                      {...field}
-                                      value={field.value}
-                                      onChange={e => field.onChange(parseFloat(e.target.value))}
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                            {formatCurrency(
-                              form.getValues(`details.${index}.quantite`) *
-                              form.getValues(`details.${index}.prix_unitaire`)
-                            )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                              onClick={() => removeDetail(index)}
-                              disabled={form.getValues("details").length <= 1}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow>
-                        <TableCell colSpan={4} className="text-right font-medium">
-                        Total:
-                      </TableCell>
-                        <TableCell className="font-bold">{formatCurrency(calculateSubtotal())}</TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-              </div>
-            )}
-
-            {/* Section des remises */}
-            {canEditRemise && (
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="font-semibold mb-4">Remises</h3>
-                  
-                  <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {canEditStatus && (
                     <FormField
                       control={form.control}
-                      name="code_remise"
+                      name="statut"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Code de remise</FormLabel>
-                          <div className="flex gap-2">
+                          <FormLabel>Statut*</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <Input 
-                                placeholder="Entrez un code de remise" 
-                                {...field} 
-                                onChange={handleRemiseCodeChange}
-                                disabled={isCheckingRemise}
-                              />
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sélectionner un statut" />
+                              </SelectTrigger>
                             </FormControl>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              onClick={() => checkRemiseCode(field.value || "")}
-                              disabled={isCheckingRemise || !field.value}
-                            >
-                              {isCheckingRemise ? "Vérification..." : "Vérifier"}
-                            </Button>
-                          </div>
-                          {remiseError && (
-                            <p className="text-sm text-red-500 mt-1">{remiseError}</p>
-                          )}
-                          <FormDescription>
-                            Entrez un code de remise valide pour appliquer une réduction à la commande.
-                          </FormDescription>
+                            <SelectContent>
+                              <SelectItem value="reçue">Reçue</SelectItem>
+                              <SelectItem value="payée">Payée</SelectItem>
+                              <SelectItem value="en_impression">En impression</SelectItem>
+                              <SelectItem value="terminée">Terminée</SelectItem>
+                              <SelectItem value="livrée">Livrée</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
-                    {currentRemise && (
-                      <div className="bg-green-50 p-4 rounded-md border border-green-200">
-                        <div className="flex items-center gap-2 text-green-700 mb-2">
-                          {currentRemise.type === 'pourcentage' ? (
-                            <Percent className="h-5 w-5" />
-                          ) : (
-                            <Euro className="h-5 w-5" />
-                          )}
-                          <h4 className="font-medium">Remise appliquée</h4>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-gray-500">Type:</span>
-                            <Badge variant="outline" className="ml-2">
-                              {currentRemise.type === 'pourcentage' ? 'Pourcentage' : 'Montant fixe'}
-                            </Badge>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Valeur:</span>
-                            <span className="ml-2 font-medium">
-                              {currentRemise.type === 'pourcentage' 
-                                ? `${currentRemise.valeur}%` 
-                                : formatCurrency(currentRemise.valeur)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Code:</span>
-                            <span className="ml-2 font-medium">{currentRemise.code_remise}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Montant remisé:</span>
-                            <span className="ml-2 font-medium text-green-600">
-                              -{formatCurrency(calculateDiscount())}
-                            </span>
-                          </div>
-                        </div>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
-                          className="mt-2 text-red-500 hover:text-red-700"
-                          onClick={() => {
-                            form.setValue("code_remise", "")
-                            setCurrentRemise(null)
-                          }}
-                        >
-                          <X className="h-4 w-4 mr-1" /> Supprimer la remise
-                        </Button>
-                      </div>
-                    )}
-                    
-                    <div className="space-y-2 mt-4">
-                      <div className="flex justify-between">
-                        <span>Sous-total</span>
-                        <span>{formatCurrency(calculateSubtotal())}</span>
-                      </div>
-                      
-                      {currentRemise && (
-                        <div className="flex justify-between text-green-600">
-                          <span>Remise</span>
-                          <span>-{formatCurrency(calculateDiscount())}</span>
-                        </div>
-                      )}
-                      
-                      <Separator className="my-2" />
-                      
-                      <div className="flex justify-between font-semibold">
-                        <span>Total</span>
-                        <span>{formatCurrency(calculateTotal())}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  )}
 
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-medium mb-2">Fichiers</h3>
-                {existingFiles.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium mb-2">Fichiers existants</h4>
-                    <div className="space-y-2">
-                      {existingFiles.map((file) => (
-                        <div key={file.print_file_id} className="flex items-center justify-between p-2 border rounded">
-                          <span className="text-sm">{file.file_name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeExistingFile(file.print_file_id)}
+                  {canEditPriority && (
+                    <FormField
+                      control={form.control}
+                      name="priorite"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Priorité</FormLabel>
+                          <Select
+                            onValueChange={(value) => field.onChange(parseInt(value))}
+                            value={field.value.toString()}
                           >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sélectionner la priorité" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="1">Normale</SelectItem>
+                              <SelectItem value="2">Moyenne</SelectItem>
+                              <SelectItem value="3">Haute</SelectItem>
+                              <SelectItem value="4">Très haute</SelectItem>
+                              <SelectItem value="5">Urgente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                {canEditDetails && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium">Articles*</h3>
+                      <Button type="button" variant="outline" size="sm" onClick={addDetail}>
+                        <Plus className="mr-1 h-4 w-4" /> Ajouter un article
+                      </Button>
+                    </div>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Matériau</TableHead>
+                            <TableHead>Dimensions</TableHead>
+                            <TableHead>Quantité</TableHead>
+                            <TableHead>Prix unitaire</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {form.getValues("details").map((_, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <FormField
+                                  control={form.control}
+                                  name={`details.${index}.materiau_id`}
+                                  render={({ field }) => (
+                                    <FormItem className="space-y-0 mb-0">
+                                      <Select
+                                        onValueChange={(value) => {
+                                          field.onChange(parseInt(value))
+                                          updatePrixUnitaire(index, parseInt(value))
+                                        }}
+                                        value={field.value.toString()}
+                                      >
+                                        <FormControl>
+                                          <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Sélectionner" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {materiauList.map((materiau) => (
+                                            <SelectItem 
+                                              key={materiau.materiau_id} 
+                                              value={materiau.materiau_id.toString()}
+                                            >
+                                              {materiau.nom || materiau.type_materiau}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <FormField
+                                  control={form.control}
+                                  name={`details.${index}.dimensions`}
+                                  render={({ field }) => (
+                                    <FormItem className="space-y-0 mb-0">
+                                      <FormControl>
+                                        <Input {...field} placeholder="LxH" className="w-[100px]" />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <FormField
+                                  control={form.control}
+                                  name={`details.${index}.quantite`}
+                                  render={({ field }) => (
+                                    <FormItem className="space-y-0 mb-0">
+                                      <FormControl>
+                                        <Input 
+                                          type="number" 
+                                          min="1" 
+                                          className="w-[80px]" 
+                                          {...field}
+                                          onChange={e => field.onChange(parseInt(e.target.value))}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <FormField
+                                  control={form.control}
+                                  name={`details.${index}.prix_unitaire`}
+                                  render={({ field }) => (
+                                    <FormItem className="space-y-0 mb-0">
+                                      <FormControl>
+                                        <Input 
+                                          className="w-[100px]" 
+                                          {...field}
+                                          value={field.value}
+                                          onChange={e => field.onChange(parseFloat(e.target.value))}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(
+                                  form.getValues(`details.${index}.quantite`) *
+                                  form.getValues(`details.${index}.prix_unitaire`)
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeDetail(index)}
+                                  disabled={form.getValues("details").length <= 1}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-right font-medium">
+                              Total:
+                            </TableCell>
+                            <TableCell className="font-bold">{formatCurrency(calculateSubtotal())}</TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 )}
-                <div {...getRootProps()} className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:border-primary">
-                  <input {...getInputProps()} />
-                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Glissez-déposez des fichiers ici ou cliquez pour sélectionner
+
+                {canEditRemise && (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <h3 className="font-semibold mb-4">Remises</h3>
+                      
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="code_remise"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Code de remise</FormLabel>
+                              <div className="flex gap-2">
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Entrez un code de remise" 
+                                    {...field} 
+                                    onChange={handleRemiseCodeChange}
+                                    disabled={isCheckingRemise}
+                                  />
+                                </FormControl>
+                                <Button 
+                                  type="button" 
+                                  variant="outline" 
+                                  onClick={() => checkRemiseCode(field.value || "")}
+                                  disabled={isCheckingRemise || !field.value}
+                                >
+                                  {isCheckingRemise ? "Vérification..." : "Vérifier"}
+                                </Button>
+                              </div>
+                              {remiseError && (
+                                <p className="text-sm text-red-500 mt-1">{remiseError}</p>
+                              )}
+                              <FormDescription>
+                                Entrez un code de remise valide pour appliquer une réduction à la commande.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        {currentRemise && (
+                          <div className="bg-green-50 p-4 rounded-md border border-green-200">
+                            <div className="flex items-center gap-2 text-green-700 mb-2">
+                              {currentRemise.type === 'pourcentage' ? (
+                                <Percent className="h-5 w-5" />
+                              ) : (
+                                <Euro className="h-5 w-5" />
+                              )}
+                              <h4 className="font-medium">Remise appliquée</h4>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-gray-500">Type:</span>
+                                <Badge variant="outline" className="ml-2">
+                                  {currentRemise.type === 'pourcentage' ? 'Pourcentage' : 'Montant fixe'}
+                                </Badge>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Valeur:</span>
+                                <span className="ml-2 font-medium">
+                                  {currentRemise.type === 'pourcentage' 
+                                    ? `${currentRemise.valeur}%` 
+                                    : formatCurrency(currentRemise.valeur)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Code:</span>
+                                <span className="ml-2 font-medium">{currentRemise.code_remise}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Montant remisé:</span>
+                                <span className="ml-2 font-medium text-green-600">
+                                  -{formatCurrency(calculateDiscount())}
+                                </span>
+                              </div>
+                            </div>
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="sm" 
+                              className="mt-2 text-red-500 hover:text-red-700"
+                              onClick={() => {
+                                form.setValue("code_remise", "")
+                                setCurrentRemise(null)
+                              }}
+                            >
+                              <X className="h-4 w-4 mr-1" /> Supprimer la remise
+                            </Button>
+                          </div>
+                        )}
+                        
+                        <div className="space-y-2 mt-4">
+                          <div className="flex justify-between">
+                            <span>Sous-total</span>
+                            <span>{formatCurrency(calculateSubtotal())}</span>
+                          </div>
+                          
+                          {currentRemise && (
+                            <div className="flex justify-between text-green-600">
+                              <span>Remise</span>
+                              <span>-{formatCurrency(calculateDiscount())}</span>
+                            </div>
+                          )}
+                          
+                          <Separator className="my-2" />
+                          
+                          <div className="flex justify-between font-semibold">
+                            <span>Total</span>
+                            <span>{formatCurrency(calculateTotal())}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="est_commande_speciale"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        Commande spéciale
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="commentaires"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Informations supplémentaires sur la commande" 
+                          className="resize-none" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormDescription>Toute information additionnelle concernant cette commande</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
+            </Form>
+          </TabsContent>
+
+          <TabsContent value="files">
+            <div className="space-y-6">
+              <div className="rounded-lg border border-dashed p-6" {...getRootProps()}>
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Glissez-déposez des fichiers ici, ou cliquez pour sélectionner
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    PDF, PNG, JPG jusqu'à 10MB
+                    PDF, PNG, JPG (max. 10MB)
                   </p>
                 </div>
-                {selectedFiles.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 border rounded">
-                        <span className="text-sm">{file.name}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeFile(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+              </div>
+
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Nouveaux fichiers</h4>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nom</TableHead>
+                          <TableHead>Taille</TableHead>
+                          <TableHead className="w-[100px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedFiles.map((file, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{file.name}</TableCell>
+                            <TableCell>{(file.size / 1024 / 1024).toFixed(2)} MB</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeFile(index)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
+                </div>
               )}
+
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Fichiers existants</h4>
+                <OrderFilesList 
+                  files={files} 
+                  loading={uploading}
+                  onDelete={handleDeleteFile}
+                />
+              </div>
             </div>
+          </TabsContent>
+        </Tabs>
 
-            <FormField
-              control={form.control}
-                name="est_commande_speciale"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">
-                      Commande spéciale
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="commentaires"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                      <Textarea 
-                        placeholder="Informations supplémentaires sur la commande" 
-                        className="resize-none" 
-                        {...field} 
-                      />
-                  </FormControl>
-                    <FormDescription>Toute information additionnelle concernant cette commande</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Annuler
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Mise à jour..." : "Mettre à jour la commande"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button 
+            type="submit" 
+            onClick={form.handleSubmit(handleSave)}
+            disabled={loading}
+          >
+            {loading ? "Enregistrement..." : "Enregistrer"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

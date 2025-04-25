@@ -12,8 +12,15 @@ import { EditClientDialog } from "./edit-client-dialog"
 import { ViewClientDialog } from "./view-client-dialog"
 import { Client } from "@/lib/api/types"
 import { clients } from "@/lib/api/client"
+import { useNotificationStore } from "@/lib/store/notifications"
+import { ClientFilters } from "./client-filters"
 
-export function ClientsList() {
+interface ClientsListProps {
+  filters?: ClientFilters
+}
+
+export function ClientsList({ filters }: ClientsListProps) {
+  const { addNotification } = useNotificationStore()
   const [clientsList, setClientsList] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +35,41 @@ export function ClientsList() {
   const loadClients = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await clients.getAll()
+      let data = await clients.getAll()
+      
+      // Appliquer les filtres
+      if (filters) {
+        if (filters.search) {
+          data = data.filter(client => 
+            client.nom.toLowerCase().includes(filters.search.toLowerCase()) ||
+            client.prenom.toLowerCase().includes(filters.search.toLowerCase()) ||
+            client.email?.toLowerCase().includes(filters.search.toLowerCase()) ||
+            client.telephone.includes(filters.search)
+          )
+        }
+
+        if (filters.showActiveOnly) {
+          // On ne filtre pas par actif car cette propriété n'existe pas dans le type Client
+          // On pourrait ajouter cette propriété si nécessaire
+        }
+
+        // Appliquer le tri
+        switch (filters.sort) {
+          case "name_asc":
+            data.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
+            break
+          case "name_desc":
+            data.sort((a, b) => (b.nom + b.prenom).localeCompare(a.nom + a.prenom))
+            break
+          case "recent":
+            data.sort((a, b) => new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime())
+            break
+          case "oldest":
+            data.sort((a, b) => new Date(a.date_creation).getTime() - new Date(b.date_creation).getTime())
+            break
+        }
+      }
+
       setClientsList(data)
       setError(null)
     } catch (err) {
@@ -38,7 +79,7 @@ export function ClientsList() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filters])
 
   useEffect(() => {
     loadClients()
@@ -63,6 +104,18 @@ export function ClientsList() {
     try {
       await clients.delete(client.client_id)
       toast.success("Client supprimé avec succès")
+      
+      // Ajouter une notification pour la suppression
+      addNotification(
+        "order_complete",
+        {
+          orderId: client.client_id.toString(),
+          clientName: `${client.prenom} ${client.nom}`
+        },
+        "accueil",
+        "caisse"
+      )
+      
       loadClients()
     } catch (err) {
       console.error("Erreur lors de la suppression:", err)
@@ -78,8 +131,20 @@ export function ClientsList() {
     adresse?: string | null
   }) => {
     try {
-      await clients.create(clientData)
+      const newClient = await clients.create(clientData)
       toast.success("Client ajouté avec succès")
+      
+      // Ajouter une notification pour le nouveau client
+      addNotification(
+        "new_order",
+        {
+          orderId: newClient.client_id.toString(),
+          clientName: `${clientData.prenom} ${clientData.nom}`
+        },
+        "accueil",
+        "caisse"
+      )
+      
       loadClients()
     } catch (err) {
       console.error("Erreur lors de l'ajout:", err)
@@ -104,6 +169,18 @@ export function ClientsList() {
         adresse: clientData.adresse,
       })
       toast.success("Client mis à jour avec succès")
+      
+      // Ajouter une notification pour la mise à jour
+      addNotification(
+        "new_order",
+        {
+          orderId: clientData.client_id.toString(),
+          clientName: `${clientData.prenom} ${clientData.nom}`
+        },
+        "accueil",
+        "caisse"
+      )
+      
       loadClients()
     } catch (err) {
       console.error("Erreur lors de la mise à jour:", err)

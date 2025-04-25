@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Commande, TypeRemise, DetailCommande } from "@/lib/api/types"
+import { Commande, TypeRemise, DetailCommande, PrintFile } from "@/lib/api/types"
 import { formatDate } from "@/lib/utils"
 import { formatCurrency } from "@/lib/api/utils"
+import { OrderFilesList } from "./order-files-list"
 
 interface ViewOrderDialogProps {
   order: Commande & {
@@ -40,6 +41,7 @@ interface ViewOrderDialogProps {
       code?: string;
       montant_applique: number;
     };
+    files?: PrintFile[];
   }
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -195,6 +197,14 @@ export function ViewOrderDialog({
                   <span>{formatCurrency(calculateTotal())}</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Section des fichiers */}
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="font-semibold mb-4">Fichiers associés</h3>
+              <OrderFilesList files={order.files || []} />
             </CardContent>
           </Card>
 
