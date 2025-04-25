@@ -259,6 +259,66 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
     )
   }
 
+  // Rendre les actions en fonction du rôle
+  const renderActions = (order: CommandeWithDetails) => {
+    const actions = [
+      {
+        label: "Voir",
+        icon: Eye,
+        onClick: () => handleViewOrder(order)
+      }
+    ]
+
+    // Les admins et l'accueil peuvent modifier
+    if (userRole === "admin" || userRole === "accueil") {
+      actions.push({
+        label: "Modifier",
+        icon: Edit2,
+        onClick: () => handleEditOrder(order)
+      })
+    }
+
+    // Seuls les admins peuvent supprimer
+    if (userRole === "admin") {
+      actions.push({
+        label: "Supprimer",
+        icon: Trash2,
+        onClick: () => handleDeleteOrder(order)
+      })
+    }
+
+    // Tout le monde peut exporter en PDF
+    actions.push({
+      label: "Exporter en PDF",
+      icon: FileText,
+      onClick: () => handleExportPDF(order)
+    })
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0">
+            <span className="sr-only">Ouvrir le menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {actions.map((action) => (
+            <DropdownMenuItem
+              key={action.label}
+              onClick={action.onClick}
+            >
+              <action.icon className="mr-2 h-4 w-4" />
+              {action.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtres */}
@@ -294,9 +354,11 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
             className="max-w-sm"
           />
         </div>
-        <Button onClick={() => setAddDialogOpen(true)}>
-          Nouvelle commande
-        </Button>
+        {(userRole === "admin" || userRole === "accueil") && (
+          <Button onClick={() => setAddDialogOpen(true)}>
+            Nouvelle commande
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -363,40 +425,7 @@ export function OrdersList({ userRole = "user" }: OrdersListProps) {
                     {formatCurrency(calculateTotal(order))}
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleViewOrder(order)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          Voir les détails
-                        </DropdownMenuItem>
-                        {userRole === "admin" && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleEditOrder(order)}>
-                              <Edit2 className="mr-2 h-4 w-4" />
-                              Modifier
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleExportPDF(order)}>
-                              <FileText className="mr-2 h-4 w-4" />
-                              Exporter PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteOrder(order)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Supprimer
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {renderActions(order)}
                   </TableCell>
                 </TableRow>
               ))
