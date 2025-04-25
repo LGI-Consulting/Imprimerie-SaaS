@@ -163,7 +163,7 @@ export const employes = {
   },
 
   // Fonctions pour gérer les notes JSON
-  getNotes: (employe: Employe): EmployeNotes => {
+  getNotes: (employe: { notes?: string }): EmployeNotes => {
     return parseEmployeNotes(employe.notes);
   },
 

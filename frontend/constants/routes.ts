@@ -32,13 +32,14 @@ export const ROUTES = {
     BASE: "/dashboard/stock",
     INVENTORY: "/dashboard/stock/inventory",
     ALERTS: "/dashboard/stock/alerts",
+    STATS: "/dashboard/stock/stats",
   },
 };
 
 // Configuration des routes protégées et leurs rôles autorisés
 export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   // Routes principales
-  [ROUTES.DASHBOARD]: ["admin", "caisse", "graphiste", "accueil", "stock"],
+  [ROUTES.DASHBOARD]: ["admin", "caisse", "graphiste", "accueil"],
   
   // Routes admin
   [ROUTES.ADMIN.BASE]: ["admin"],
@@ -63,7 +64,7 @@ export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   [ROUTES.ACCUEIL.CLIENTS]: ["admin", "accueil"],
   
   // Routes stock
-  [ROUTES.STOCK.BASE]: ["admin", "stock"],
-  [ROUTES.STOCK.INVENTORY]: ["admin", "stock"],
-  [ROUTES.STOCK.ALERTS]: ["admin", "stock"],
+  [ROUTES.STOCK.BASE]: ["admin", "accueil", "graphiste"],
+  [ROUTES.STOCK.INVENTORY]: ["admin", "accueil", "graphiste"],
+  [ROUTES.STOCK.ALERTS]: ["admin", "accueil", "graphiste"],
 }; 

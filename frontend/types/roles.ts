@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "caisse" | "graphiste" | "accueil" | "stock";
+export type UserRole = "admin" | "caisse" | "graphiste" | "accueil";
 
 export interface UserPermissions {
   canViewDashboard: boolean;
@@ -43,17 +43,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, UserPermissions> = {
     canManageUsers: false,
     canManageOrders: true,
     canManagePayments: false,
-    canManageInventory: false,
-    canViewReports: false,
-    canManageSettings: false,
-  },
-  stock: {
-    canViewDashboard: true,
-    canManageUsers: false,
-    canManageOrders: false,
-    canManagePayments: false,
     canManageInventory: true,
-    canViewReports: true,
+    canViewReports: false,
     canManageSettings: false,
   },
 }; 
