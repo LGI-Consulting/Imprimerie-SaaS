@@ -32,7 +32,7 @@ export default function StockPage() {
       return
     }
 
-    if (!hasRole(["admin", "caisse", "graphiste"])) {
+    if (!hasRole(["admin", "accueil", "graphiste"])) {
       router.push("/dashboard")
       return
     }

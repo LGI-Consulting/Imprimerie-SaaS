@@ -6,13 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/context/auth-context"
 import { UnauthorizedAlert } from "@/components/dashboard/unauthorized-alert"
 import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 export default function AccueilPage() {
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
   const router = useRouter()
 
-  if (!user || user.role !== "accueil") {
-    return <UnauthorizedAlert onDismiss={() => router.push("/")} />
+  // Vérifier les permissions
+  useEffect(() => {
+      if (!user) {
+          router.push("/login")
+          return
+      }
+
+      if (!hasRole(["admin", "accueil"])) {
+          router.push("/dashboard")
+          return
+      }
+  }, [user, hasRole, router])
+
+  if (!user || !hasRole(["admin", "accueil"])) {
+      return null
   }
 
   return (

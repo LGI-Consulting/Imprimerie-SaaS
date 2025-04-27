@@ -88,13 +88,6 @@ export function NotificationCenter({ role }: NotificationCenterProps) {
           </TabsContent>
         </Tabs>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <Button variant="ghost" className="w-full cursor-pointer justify-center">
-              Voir toutes les notifications
-            </Button>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

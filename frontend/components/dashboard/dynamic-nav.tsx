@@ -77,24 +77,6 @@ const navItems: Record<UserRole, NavItem[]> = {
       icon: LayoutDashboard,
       permission: "canViewDashboard",
     },
-    {
-      title: "File d'attente",
-      href: ROUTES.ATELIER.QUEUE,
-      icon: Printer,
-      permission: "canManageOrders",
-    },
-    {
-      title: "Fichiers",
-      href: ROUTES.ATELIER.FILES,
-      icon: FileText,
-      permission: "canManageOrders",
-    },
-    {
-      title: "Production",
-      href: ROUTES.ATELIER.PRODUCTION,
-      icon: Printer,
-      permission: "canManageOrders",
-    },
   ],
   accueil: [
     {
@@ -114,26 +96,6 @@ const navItems: Record<UserRole, NavItem[]> = {
       href: ROUTES.ACCUEIL.CLIENTS,
       icon: Users,
       permission: "canManageOrders",
-    },
-  ],
-  stock: [
-    {
-      title: "Vue d'ensemble",
-      href: ROUTES.STOCK.BASE,
-      icon: LayoutDashboard,
-      permission: "canViewDashboard",
-    },
-    {
-      title: "Inventaire",
-      href: ROUTES.STOCK.INVENTORY,
-      icon: Package,
-      permission: "canManageInventory",
-    },
-    {
-      title: "Alertes",
-      href: ROUTES.STOCK.ALERTS,
-      icon: BarChart,
-      permission: "canViewReports",
     },
   ],
 }

@@ -22,12 +22,12 @@ export default function CaisseLayout({ children }: CaisseLayoutProps) {
   const { user, isLoading, isAuthenticated, hasRole } = useAuth()
 
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !user || !hasRole(["caisse"]))) {
+    if (!isLoading && (!isAuthenticated || !user || !hasRole(["caisse", "admin"]))) {
       router.push(ROUTES.LOGIN)
     }
   }, [isLoading, isAuthenticated, user, hasRole, router])
 
-  if (isLoading || !isAuthenticated || !user || !hasRole(["caisse"])) {
+  if (isLoading || !isAuthenticated || !user || !hasRole(["caisse", "admin"])) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

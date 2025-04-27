@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { DynamicNav } from "./dynamic-nav"
 import { UserRole, UserPermissions, ROLE_PERMISSIONS } from "@/types/roles"
 import {
   DropdownMenu,
@@ -55,10 +54,6 @@ export function DashboardHeader({
         >
           <Menu className="h-5 w-5" />
         </Button>
-
-        <div className="mr-4 hidden md:flex">
-          <DynamicNav userRole={userRole} permissions={permissions} />
-        </div>
 
         <div className="flex flex-1 items-center justify-end space-x-4">
           <NotificationCenter role={userRole} />

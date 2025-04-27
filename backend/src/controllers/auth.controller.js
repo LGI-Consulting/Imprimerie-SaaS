@@ -70,7 +70,7 @@ async function register(req, res) {
 // Fonction pour générer les tokens
 function generateTokens(user) {
   const accessToken = jwt.sign(user, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRATION || "15m",
+    expiresIn: process.env.JWT_EXPIRATION || "1d",
   });
 
   const refreshToken = jwt.sign(user, process.env.JWT_SECRET_REFRESH, {

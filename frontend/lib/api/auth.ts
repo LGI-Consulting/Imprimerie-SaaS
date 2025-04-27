@@ -41,9 +41,6 @@ export interface AuthResponse {
 export const auth = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
-    if (response.data?.data?.token) {
-      document.cookie = `token=${response.data.data.token}; path=/; secure; samesite=strict`;
-    }
     return response.data;
   },
 
@@ -54,7 +51,6 @@ export const auth = {
 
   logout: async (): Promise<void> => {
     await api.post('/auth/logout');
-    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   },
 
   getProfile: async (): Promise<UserData> => {
@@ -64,9 +60,6 @@ export const auth = {
 
   refreshToken: async (): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>('/auth/token/refresh');
-    if (response.data?.data?.token) {
-      document.cookie = `token=${response.data.data.token}; path=/; secure; samesite=strict`;
-    }
     return response.data;
   },
 };

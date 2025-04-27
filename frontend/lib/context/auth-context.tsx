@@ -42,6 +42,23 @@ function getDefaultRouteForRole(role: UserRole): string {
   }
 }
 
+// Fonction utilitaire pour gérer le token
+const setToken = (token: string) => {
+  const expires = new Date();
+  expires.setTime(expires.getTime() + (24 * 60 * 60 * 1000)); // 24 heures
+  document.cookie = `token=${token}; path=/; secure; samesite=strict; expires=${expires.toUTCString()}`;
+};
+
+const removeToken = () => {
+  document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+};
+
+const getToken = () => {
+  const cookies = document.cookie.split(';');
+  const tokenCookie = cookies.find(cookie => cookie.trim().startsWith('token='));
+  return tokenCookie ? tokenCookie.split('=')[1] : null;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
@@ -55,13 +72,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
+      const token = getToken();
+      if (!token) {
+        throw new Error('No token found');
+      }
       const userData = await auth.getProfile();
-      setUser(userData as UserData);
+      setUser(userData);
       setIsAuthenticated(true);
     } catch (error) {
       console.error("Erreur lors de la vérification de l'authentification:", error);
       setUser(null);
       setIsAuthenticated(false);
+      removeToken();
     } finally {
       setIsLoading(false);
     }
@@ -70,13 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await auth.login({ email, password });
-      console.log('Login response:', response);
-      if (response.data) {
+      if (response.data?.token) {
+        setToken(response.data.token);
         const { token, ...userData } = response.data;
-        console.log('Setting user data:', userData);
         setUser(userData);
         setIsAuthenticated(true);
-        console.log('Redirecting to dashboard...');
         router.push(ROUTES.DASHBOARD);
       }
     } catch (error) {
@@ -90,7 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await auth.logout();
       setUser(null);
       setIsAuthenticated(false);
-      router.push("/login");
+      removeToken();
+      router.push(ROUTES.LOGIN);
     } catch (error) {
       console.error("Erreur de déconnexion:", error);
       throw error;
@@ -100,7 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = async () => {
     try {
       const response = await auth.refreshToken();
-      if (response.data) {
+      if (response.data?.token) {
+        setToken(response.data.token);
         const { token, ...userData } = response.data;
         setUser(userData);
       }

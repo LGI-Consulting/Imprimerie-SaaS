@@ -23,12 +23,12 @@ export default function AccueilLayout({ children }: AccueilLayoutProps) {
   const { user, isLoading, isAuthenticated, hasRole } = useAuth()
 
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !user || !hasRole(["accueil"]))) {
+    if (!isLoading && (!isAuthenticated || !user || !hasRole(["accueil", "admin"]))) {
       router.push(ROUTES.LOGIN)
     }
   }, [isLoading, isAuthenticated, user, hasRole, router])
 
-  if (isLoading || !isAuthenticated || !user || !hasRole(["accueil"])) {
+  if (isLoading || !isAuthenticated || !user || !hasRole(["accueil", "admin"])) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
