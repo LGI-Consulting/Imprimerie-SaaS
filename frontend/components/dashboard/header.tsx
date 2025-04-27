@@ -24,10 +24,6 @@ interface HeaderProps {
     role: string
     avatar: string
   }
-  currentTenant: {
-    name: string
-    logo: string
-  }
   role: UserRole
   permissions: any
 }
@@ -37,7 +33,6 @@ export function DashboardHeader({
   userRole,
   userName,
   currentUser,
-  currentTenant,
   role,
   permissions,
 }: HeaderProps) {

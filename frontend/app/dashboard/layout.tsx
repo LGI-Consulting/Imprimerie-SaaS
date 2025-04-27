@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { DashboardHeader } from "@/components/dashboard/header"
-import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { useAuth } from "@/lib/context/auth-context"
 import { UserRole, ROLE_PERMISSIONS } from "@/types/roles"
 import { ROUTES } from "@/constants/routes"
@@ -16,7 +14,6 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
   const { user, isLoading, isAuthenticated } = useAuth()
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -41,41 +38,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return null
   }
 
-  // Obtenir le nom complet de l'employé
-  const userName = employes.getFullName(user)
-
+ 
   return (
-    <div className="flex min-h-screen flex-col">
-      <DashboardHeader 
-        onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        userRole={userRole}
-        userName={userName}
-        currentUser={{
-          name: userName,
-          role: userRole,
-          avatar: "/placeholder.svg"
-        }}
-        currentTenant={{
-          name: "Imprimerie SaaS",
-          logo: "/logo.svg"
-        }}
-        role={userRole}
-        permissions={userPermissions}
-      />
-      
-      <div className="flex flex-1">
-        <DashboardSidebar 
-          isOpen={isSidebarOpen}
-          userRole={userRole}
-          permissions={userPermissions}
-        />
+
+              
         
         <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
           <div className="mx-auto max-w-7xl">
             {children}
           </div>
         </main>
-      </div>
-    </div>
   )
 } 

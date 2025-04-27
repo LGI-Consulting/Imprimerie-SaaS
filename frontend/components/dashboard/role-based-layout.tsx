@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { DashboardHeader } from "./header"
@@ -47,7 +46,7 @@ export function RoleBasedLayout({ children, navigation, role, currentUser, curre
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="absolute inset-0 flex w-full h-screen overflow-hidden bg-background">
         <Sidebar>
           <SidebarHeader className="flex h-14 items-center border-b px-6">
             <div className="flex items-center gap-2">
@@ -99,17 +98,15 @@ export function RoleBasedLayout({ children, navigation, role, currentUser, curre
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col h-screen overflow-hidden">
           <DashboardHeader
             onMenuClick={() => {}}
             userRole={role}
             userName={currentUser.name}
             currentUser={currentUser}
-            currentTenant={currentTenant}
             role={role}
             permissions={permissions}
           />
-
           <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
         </div>
       </div>
