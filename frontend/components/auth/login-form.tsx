@@ -11,6 +11,7 @@ import { useState } from "react"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useAuth } from "@/lib/context/auth-context"
+import { ROUTES } from "@/constants/routes"
 
 const formSchema = z.object({
   email: z.string().email({ message: "Veuillez entrer une adresse email valide" }),
@@ -37,6 +38,9 @@ export function LoginForm() {
 
     try {
       await login(values.email, values.password)
+      // Attendre un court instant pour s'assurer que le token est bien stocké
+      await new Promise(resolve => setTimeout(resolve, 100))
+      router.push(ROUTES.DASHBOARD)
     } catch (err) {
       setError("Email ou mot de passe incorrect. Veuillez réessayer.")
     } finally {

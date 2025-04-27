@@ -115,7 +115,6 @@ async function login(req, res) {
       id: employee.employe_id,
       email: employee.email,
       role: employee.role,
-      type: "employee",
     };
 
     const { accessToken, refreshToken } = generateTokens(payload);

@@ -39,8 +39,6 @@ function getDefaultRouteForRole(role: UserRole): string {
       return ROUTES.ATELIER.BASE;
     case "accueil":
       return ROUTES.ACCUEIL.BASE;
-    case "stock":
-      return ROUTES.STOCK.BASE;
     default:
       return ROUTES.LOGIN;
   }

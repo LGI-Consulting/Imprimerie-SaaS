@@ -70,11 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await auth.login({ email, password });
+      console.log('Login response:', response);
       if (response.data) {
         const { token, ...userData } = response.data;
+        console.log('Setting user data:', userData);
         setUser(userData);
         setIsAuthenticated(true);
-        router.push(getDefaultRouteForRole(userData.role as UserRole));
+        console.log('Redirecting to dashboard...');
+        router.push(ROUTES.DASHBOARD);
       }
     } catch (error) {
       console.error("Erreur lors de la connexion:", error);

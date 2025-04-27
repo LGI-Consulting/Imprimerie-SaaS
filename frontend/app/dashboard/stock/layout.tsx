@@ -6,7 +6,7 @@ import { RoleBasedLayout } from "@/components/dashboard/role-based-layout"
 import { useAuth } from "@/lib/context/auth-context"
 import { ROUTES } from "@/constants/routes"
 import { employes } from "@/lib/api/employes"
-import { ROLE_PERMISSIONS } from "@/types/roles"
+import { ROLE_PERMISSIONS, UserRole } from "@/types/roles"
 import {
   Package,
   AlertTriangle,
@@ -49,7 +49,7 @@ export default function StockLayout({ children }: StockLayoutProps) {
   return (
     <RoleBasedLayout
       navigation={stockNavigation}
-      role={user.role}
+      role={user.role as UserRole}
       currentUser={{
         name: user.prenom + " " + user.nom,
         role: user.role,
