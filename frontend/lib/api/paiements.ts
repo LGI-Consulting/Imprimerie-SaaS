@@ -86,12 +86,12 @@ export interface PaiementsPaginatedResponse {
 // Fonctions pour les paiements
 export const paiements = {
   getAll: async (): Promise<Paiement[]> => {
-    const response = await api.get<PaiementsResponse>('/paiement');
+    const response = await api.get<PaiementsResponse>('/paiements');
     return response.data.data;
   },
 
   getById: async (id: number): Promise<{ payment: Paiement; facture?: Facture }> => {
-    const response = await api.get<PaiementResponse>(`/paiement/${id}`);
+    const response = await api.get<PaiementResponse>(`/paiements/${id}`);
     if (!response.data.data) {
       throw new Error('Paiement non trouvé');
     }
@@ -99,7 +99,7 @@ export const paiements = {
   },
 
   create: async (data: PaiementCreate): Promise<{ payment: Paiement; facture?: Facture | undefined }> => {
-    const response = await api.post<PaiementResponse>('/paiement', data);
+    const response = await api.post<PaiementResponse>('/paiements', data);
     if (!response.data.data) {
       throw new Error('Erreur lors de la création du paiement');
     }
@@ -107,7 +107,7 @@ export const paiements = {
   },
 
   update: async (id: number, data: PaiementUpdate): Promise<Paiement> => {
-    const response = await api.put<PaiementResponse>(`/paiement/${id}`, data);
+    const response = await api.put<PaiementResponse>(`/paiements/${id}`, data);
     if (!response.data.data) {
       throw new Error('Erreur lors de la mise à jour du paiement');
     }
@@ -115,17 +115,17 @@ export const paiements = {
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/paiement/${id}`);
+    await api.delete(`/paiements/${id}`);
   },
 
   // Fonctions pour les factures
   getAllFactures: async (): Promise<Facture[]> => {
-    const response = await api.get<FacturesResponse>('/facture');
+    const response = await api.get<FacturesResponse>('/paiements/facture');
     return response.data.data;
   },
 
   getFactureById: async (id: number): Promise<{ facture: Facture; payment?: Paiement }> => {
-    const response = await api.get<FactureResponse>(`/facture/${id}`);
+    const response = await api.get<FactureResponse>(`/paiements/facture/${id}`);
     if (!response.data.data) {
       throw new Error('Facture non trouvée');
     }
@@ -133,7 +133,7 @@ export const paiements = {
   },
 
   updateFacture: async (id: number, data: FactureUpdate): Promise<Facture> => {
-    const response = await api.put<FactureResponse>(`/facture/${id}`, data);
+    const response = await api.put<FactureResponse>(`/paiements/facture/${id}`, data);
     if (!response.data.data) {
       throw new Error('Erreur lors de la mise à jour de la facture');
     }
@@ -141,14 +141,14 @@ export const paiements = {
   },
 
   deleteFacture: async (id: number): Promise<void> => {
-    await api.delete(`/facture/${id}`);
+    await api.delete(`/paiements/facture/${id}`);
   },
 
   // Fonctions utilitaires
   formatAmount: (amount: number): string => {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'XOF'
     }).format(amount);
   },
 
@@ -193,21 +193,51 @@ export const paiements = {
     pageSize: number;
     totalPages: number;
   }> => {
-    const queryParams = new URLSearchParams({
-      page: page.toString(),
-      pageSize: pageSize.toString(),
-      ...(filters?.status && { status: filters.status }),
-      ...(filters?.method && { method: filters.method }),
-      ...(filters?.startDate && { startDate: filters.startDate }),
-      ...(filters?.endDate && { endDate: filters.endDate }),
-      ...(filters?.minAmount && { minAmount: filters.minAmount.toString() }),
-      ...(filters?.maxAmount && { maxAmount: filters.maxAmount.toString() }),
-      ...(filters?.search && { search: filters.search }),
-    });
-
-    const response = await api.get<PaiementsPaginatedResponse>(`/paiement/paginated?${queryParams}`);
-    return response.data.data;
-  },
+    // Récupérer toutes les données
+    const allPayments = await paiements.getAll();
+    
+    // Filtrer les données selon les critères
+    let filteredPayments = [...allPayments];
+    
+    if (filters) {
+      if (filters.status) {
+        filteredPayments = filteredPayments.filter(p => p.statut === filters.status);
+      }
+      if (filters.method) {
+        filteredPayments = filteredPayments.filter(p => p.methode === filters.method);
+      }
+      if (filters.startDate) {
+        const startDate = new Date(filters.startDate);
+        filteredPayments = filteredPayments.filter(p => new Date(p.date_paiement) >= startDate);
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        filteredPayments = filteredPayments.filter(p => new Date(p.date_paiement) <= endDate);
+      }
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        filteredPayments = filteredPayments.filter(p => 
+          (p.commande_id.toString().includes(searchLower)) ||
+          (p.paiement_id.toString().includes(searchLower))
+        );
+      }
+    }
+    
+    // Calculer la pagination
+    const total = filteredPayments.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, total);
+    const paginatedPayments = filteredPayments.slice(startIndex, endIndex);
+    
+    return {
+      payments: paginatedPayments,
+      total,
+      page,
+      pageSize,
+      totalPages
+    };
+  }
 };
 
 export default paiements;

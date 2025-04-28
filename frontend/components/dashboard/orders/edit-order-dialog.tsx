@@ -287,7 +287,7 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
         file_path: URL.createObjectURL(file),
         commande_id: order.commande_id,
         description: "",
-        uploaded_by: user?.employe_id || 0
+        uploaded_by: user?.id || 0
       }
       setFiles(prev => [...prev, newFile])
     } catch (error) {

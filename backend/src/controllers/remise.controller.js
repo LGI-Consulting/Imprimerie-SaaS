@@ -124,6 +124,37 @@ export const getRemiseById = async (req, res) => {
   }
 };
 
+// Obtenir une remise par code
+export const getRemiseByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    const query = `
+      SELECT r.*, 
+             c.nom as client_nom, 
+             c.prenom as client_prenom,
+             cmd.numero_commande
+      FROM remises r
+      LEFT JOIN clients c ON r.client_id = c.client_id
+      LEFT JOIN commandes cmd ON r.commande_id = cmd.commande_id
+      WHERE r.code_remise = $1 AND r.est_active = true
+    `;
+    
+    const { rows } = await pool.query(query, [code]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Remise non trouvée" });
+    }
+    
+    res.status(200).json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ 
+      message: "Erreur lors de la récupération de la remise", 
+      error: error.message 
+    });
+  }
+};
+
 // Mettre à jour une remise
 export const updateRemise = async (req, res) => {
   const client = await pool.connect();

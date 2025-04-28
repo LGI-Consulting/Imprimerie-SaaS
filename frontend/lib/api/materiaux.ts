@@ -94,12 +94,12 @@ export interface MateriauFilters {
 // Fonctions pour les matériaux
 export const materiaux = {
   getAll: async (): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiau');
+    const response = await api.get<MateriauxResponse>('/materiaux');
     return response.data.data;
   },
 
   getById: async (id: number): Promise<Materiau> => {
-    const response = await api.get<MateriauResponse>(`/materiau/${id}`);
+    const response = await api.get<MateriauResponse>(`/materiaux/${id}`);
     if (!response.data.data) {
       throw new Error('Matériau non trouvé');
     }
@@ -107,19 +107,19 @@ export const materiaux = {
   },
 
   search: async (term: string): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiau/search', {
+    const response = await api.get<MateriauxResponse>('/materiaux/search', {
       params: { term }
     });
     return response.data.data;
   },
 
   getLowStock: async (): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiau/stock');
+    const response = await api.get<MateriauxResponse>('/materiaux/stock/low');
     return response.data.data;
   },
 
   create: async (data: MateriauCreate): Promise<Materiau> => {
-    const response = await api.post<MateriauResponse>('/materiau', data);
+    const response = await api.post<MateriauResponse>('/materiaux', data);
     if (!response.data.data) {
       throw new Error('Erreur lors de la création du matériau');
     }
@@ -127,7 +127,7 @@ export const materiaux = {
   },
 
   update: async (id: number, data: MateriauUpdate): Promise<Materiau> => {
-    const response = await api.put<MateriauResponse>(`/materiau/${id}`, data);
+    const response = await api.put<MateriauResponse>(`/materiaux/${id}`, data);
     if (!response.data.data) {
       throw new Error('Erreur lors de la mise à jour du matériau');
     }
@@ -135,17 +135,17 @@ export const materiaux = {
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/materiau/${id}`);
+    await api.delete(`/materiaux/${id}`);
   },
 
   // Fonctions pour les mouvements de stock
   getMouvements: async (stockId: number): Promise<MouvementStock[]> => {
-    const response = await api.get<MouvementsResponse>(`/materiau/stock/${stockId}/mouvements`);
+    const response = await api.get<MouvementsResponse>(`/materiaux/stock/${stockId}/mouvements`);
     return response.data.data;
   },
 
   createMouvement: async (data: MouvementStockCreate): Promise<MouvementStock> => {
-    const response = await api.post<{ success: boolean; data: MouvementStock }>('/materiau/stock/mouvement', data);
+    const response = await api.post<{ success: boolean; data: MouvementStock }>('/materiaux/stock/mouvement', data);
     return response.data.data;
   },
 
@@ -154,7 +154,7 @@ export const materiaux = {
     type_materiau: string;
     materiau_unite_mesure: string;
   }> => {
-    const response = await api.get<StockResponse>(`/materiau/stock/${stockId}`);
+    const response = await api.get<StockResponse>(`/materiaux/stock/${stockId}`);
     return response.data.data;
   },
 

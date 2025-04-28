@@ -51,11 +51,6 @@ export const remises = {
     return response.data.data;
   },
 
-  getByClient: async (clientId: number): Promise<Remise[]> => {
-    const response = await api.get<RemisesResponse>(`/remises/client/${clientId}`);
-    return response.data.data;
-  },
-
   create: async (data: RemiseCreate): Promise<RemiseResponse['data']> => {
     const response = await api.post<RemiseResponse>('/remises', data);
     if (!response.data.data) {

@@ -4,6 +4,7 @@ import {
   createRemise,
   getAllRemises,
   getRemiseById,
+  getRemiseByCode,
   updateRemise,
   deleteRemise,
   verifyRemiseCode,
@@ -15,6 +16,7 @@ const router = express.Router();
 // Routes protégées par authentification et rôle
 router.post('/', checkRole(['admin', 'caisse']), createRemise);
 router.get('/', checkRole(['admin', 'caisse']), getAllRemises);
+router.get('/code/:code', checkRole(['admin', 'caisse']), getRemiseByCode);
 router.get('/:id', checkRole(['admin', 'caisse']), getRemiseById);
 router.put('/:id', checkRole(['admin', 'caisse']), updateRemise);
 router.delete('/:id', checkRole(['admin']), deleteRemise);
