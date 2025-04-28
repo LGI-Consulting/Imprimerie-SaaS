@@ -50,38 +50,38 @@ export interface ClientOrder {
 export const clients = {
   getAll: async (): Promise<Client[]> => {
     const response = await api.get<ClientsResponse>('/clients');
-    return response.data.data;
+    return response.data;
   },
 
   getById: async (id: number): Promise<Client> => {
     const response = await api.get<ClientResponse>(`/clients/${id}`);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Client non trouvé');
     }
-    return response.data.data;
+    return response.data;
   },
 
   search: async (query: string): Promise<Client[]> => {
     const response = await api.get<ClientsResponse>('/clients/search', {
       params: { q: query }
     });
-    return response.data.data;
+    return response.data;
   },
 
   create: async (data: ClientCreate): Promise<Client> => {
     const response = await api.post<ClientResponse>('/clients', data);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Erreur lors de la création du client');
     }
-    return response.data.data;
+    return response.data;
   },
 
   update: async (id: number, data: ClientUpdate): Promise<Client> => {
     const response = await api.put<ClientResponse>(`/clients/${id}`, data);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Erreur lors de la mise à jour du client');
     }
-    return response.data.data;
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
@@ -91,12 +91,12 @@ export const clients = {
   // Nouvelles fonctions pour les commandes et statistiques
   getOrders: async (id: number): Promise<ClientOrder[]> => {
     const response = await api.get<{ success: boolean; message: string; data: ClientOrder[] }>(`/clients/${id}/orders`);
-    return response.data.data;
+    return response.data;
   },
 
   getStats: async (id: number): Promise<ClientStats> => {
     const response = await api.get<{ success: boolean; message: string; data: ClientStats }>(`/clients/${id}/stats`);
-    return response.data.data;
+    return response.data;
   },
 
   // Fonction utilitaire pour formater le nom complet

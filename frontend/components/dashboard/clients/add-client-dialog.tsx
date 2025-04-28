@@ -29,15 +29,11 @@ const formSchema = z.object({
   prenom: z.string().min(2, {
     message: "Le prénom doit contenir au moins 2 caractères.",
   }),
-  email: z.string().email({
-    message: "Veuillez entrer une adresse email valide.",
-  }).optional().transform(val => val || ""),
+  email: z.string().optional().transform(val => val || ""),
   telephone: z.string().min(10, {
     message: "Le numéro de téléphone doit contenir au moins 10 chiffres.",
   }),
-  adresse: z.string().min(5, {
-    message: "L'adresse doit contenir au moins 5 caractères.",
-  }).optional().transform(val => val || ""),
+  adresse: z.string().optional().transform(val => val || ""),
   notes: z.string().optional(),
 })
 
