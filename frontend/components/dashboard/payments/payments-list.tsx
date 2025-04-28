@@ -169,7 +169,7 @@ export function PaymentsList() {
             <SelectValue placeholder="Statut" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous les statuts</SelectItem>
+            <SelectItem value="all">Tous les statuts</SelectItem>
             <SelectItem value="en_attente">En attente</SelectItem>
             <SelectItem value="validé">Validé</SelectItem>
             <SelectItem value="échoué">Échoué</SelectItem>
@@ -186,7 +186,7 @@ export function PaymentsList() {
             <SelectValue placeholder="Méthode" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Toutes les méthodes</SelectItem>
+            <SelectItem value="all">Toutes les méthodes</SelectItem>
             <SelectItem value="espèces">Espèces</SelectItem>
             <SelectItem value="flooz">Flooz</SelectItem>
             <SelectItem value="mixx">Mixx</SelectItem>
@@ -208,7 +208,7 @@ export function PaymentsList() {
         <div className="flex gap-2">
           <Input
             type="number"
-            placeholder="Montant min"
+            placeholder="Min"
             value={filters.minAmount || ""}
             onChange={(e) =>
               setFilters((prev) => ({
@@ -220,7 +220,7 @@ export function PaymentsList() {
           />
           <Input
             type="number"
-            placeholder="Montant max"
+            placeholder="Max"
             value={filters.maxAmount || ""}
             onChange={(e) =>
               setFilters((prev) => ({

@@ -430,7 +430,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                             <div className="flex items-center justify-center p-2">
                               <Loader2 className="h-4 w-4 animate-spin" />
                             </div>
-                          ) : clientsList.length > 0 ? (
+                          ) : clientsList && clientsList.length > 0 ? (
                             clientsList.map((client) => (
                               <SelectItem key={client.id} value={client.id.toString()}>
                                 {client.nom} {client.prenom}
