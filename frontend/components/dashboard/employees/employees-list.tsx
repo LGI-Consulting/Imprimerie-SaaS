@@ -16,45 +16,47 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { employes } from "@/lib/api/employes";
 import type { Employe, Role } from "@/lib/api/types/employee.types";
-import { MoreHorizontal, Search, Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { AddEmployeeDialog } from "./add-employee-dialog";
 import { EditEmployeeDialog } from "./edit-employee-dialog";
 import { ViewEmployeeDialog } from "./view-employee-dialog";
+import { EmployeeSearch } from "./employee-search";
+import { EmployeeFilters } from "./employee-filters";
+
+// Type pour les filtres combinés (issu des deux composants)
+type CombinedFilters = {
+  query?: string;
+  role?: Role;
+  est_actif?: boolean;
+  date_embauche_debut?: string;
+  date_embauche_fin?: string;
+  tri?: string;
+  departement?: string;
+  performance_min?: number;
+};
 
 export function EmployeesList() {
   const [employees, setEmployees] = useState<Employe[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<Role | "">("");
-  const [statusFilter, setStatusFilter] = useState<boolean | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employe | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+  const [currentFilters, setCurrentFilters] = useState<CombinedFilters>({});
   const { toast } = useToast();
 
   // Charger les employés
-  const loadEmployees = async () => {
+  const loadEmployees = async (filters?: CombinedFilters) => {
     try {
       setLoading(true);
-      const data = await employes.getAll({
-        search: searchQuery,
-        role: roleFilter || undefined,
-        est_actif: statusFilter === null ? undefined : statusFilter,
-      });
+      const data = await employes.getAll();
       setEmployees(data);
+      console.log(data)
     } catch (error) {
       toast({
         title: "Erreur",
@@ -69,7 +71,27 @@ export function EmployeesList() {
   // Effet pour charger les employés
   useEffect(() => {
     loadEmployees();
-  }, [searchQuery, roleFilter, statusFilter]);
+  }, []);
+
+  // Gérer la recherche depuis EmployeeSearch
+  const handleSearch = (searchFilters: any) => {
+    const updatedFilters = { ...currentFilters, ...searchFilters };
+    setCurrentFilters(updatedFilters);
+    loadEmployees(updatedFilters);
+  };
+
+  // Gérer les filtres avancés depuis EmployeeFilters
+  const handleFiltersChange = (advancedFilters: any) => {
+    const updatedFilters = { ...currentFilters, ...advancedFilters };
+    setCurrentFilters(updatedFilters);
+    loadEmployees(updatedFilters);
+  };
+
+  // Réinitialiser tous les filtres
+  const handleResetFilters = () => {
+    setCurrentFilters({});
+    loadEmployees({});
+  };
 
   // Gérer la suppression d'un employé
   const handleDelete = async (id: number) => {
@@ -81,7 +103,7 @@ export function EmployeesList() {
         title: "Succès",
         description: "Employé supprimé avec succès",
       });
-      loadEmployees();
+      loadEmployees(currentFilters);
     } catch (error) {
       toast({
         title: "Erreur",
@@ -99,7 +121,7 @@ export function EmployeesList() {
         title: "Succès",
         description: "Statut mis à jour avec succès",
       });
-      loadEmployees();
+      loadEmployees(currentFilters);
     } catch (error) {
       toast({
         title: "Erreur",
@@ -110,44 +132,13 @@ export function EmployeesList() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* En-tête avec recherche et filtres */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher un employé..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as Role | "")}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrer par rôle" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Tous les rôles</SelectItem>
-              <SelectItem value="admin">Administrateur</SelectItem>
-              <SelectItem value="accueil">Accueil</SelectItem>
-              <SelectItem value="caisse">Caisse</SelectItem>
-              <SelectItem value="graphiste">Graphiste</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={statusFilter === null ? "" : statusFilter.toString()}
-            onValueChange={(value) => setStatusFilter(value === "" ? null : value === "true")}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrer par statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Tous les statuts</SelectItem>
-              <SelectItem value="true">Actif</SelectItem>
-              <SelectItem value="false">Inactif</SelectItem>
-            </SelectContent>
-          </Select>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
+          <EmployeeSearch 
+            onSearch={handleSearch} 
+            onReset={handleResetFilters} 
+          />
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -155,6 +146,15 @@ export function EmployeesList() {
         </Button>
       </div>
 
+      {/* Filtres avancés (optionnels) */}
+      {isFiltersVisible && (
+        <EmployeeFilters
+          onFiltersChange={handleFiltersChange}
+          onReset={handleResetFilters}
+        />
+      )}
+
+     
       {/* Tableau des employés */}
       <div className="rounded-md border">
         <Table>
@@ -176,14 +176,14 @@ export function EmployeesList() {
                   Chargement...
                 </TableCell>
               </TableRow>
-            ) : employees.length === 0 ? (
+            ) : employees && employees.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center">
                   Aucun employé trouvé
                 </TableCell>
               </TableRow>
             ) : (
-              employees.map((employee) => (
+              employees && employees.map((employee) => (
                 <TableRow key={employee.employe_id}>
                   <TableCell>
                     {employes.getFullName(employee)}
@@ -253,7 +253,7 @@ export function EmployeesList() {
         onOpenChange={setIsAddDialogOpen}
         onSuccess={() => {
           setIsAddDialogOpen(false);
-          loadEmployees();
+          loadEmployees(currentFilters);
         }}
       />
 
@@ -265,7 +265,7 @@ export function EmployeesList() {
             onOpenChange={setIsEditDialogOpen}
             onSuccess={() => {
               setIsEditDialogOpen(false);
-              loadEmployees();
+              loadEmployees(currentFilters);
             }}
           />
 
@@ -278,4 +278,4 @@ export function EmployeesList() {
       )}
     </div>
   );
-} 
+}

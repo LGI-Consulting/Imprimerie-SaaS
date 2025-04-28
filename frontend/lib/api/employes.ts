@@ -44,38 +44,38 @@ export const employes = {
     const response = await api.get<EmployesResponse>('/employe', { 
       params: filters 
     });
-    return response.data.data;
+    return response.data;
   },
 
   getById: async (id: number): Promise<Employe> => {
     const response = await api.get<EmployeResponse>(`/employe/${id}`);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Employé non trouvé');
     }
-    return response.data.data;
+    return response.data;
   },
 
   search: async (query: string): Promise<Employe[]> => {
     const response = await api.get<EmployesResponse>('/employe/search', {
       params: { query }
     });
-    return response.data.data;
+    return response.data;
   },
 
   create: async (data: EmployeCreate): Promise<Employe> => {
     const response = await api.post<EmployeResponse>('/employe', data);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Erreur lors de la création de l\'employé');
     }
-    return response.data.data;
+    return response.data;
   },
 
   update: async (id: number, data: EmployeUpdate): Promise<Employe> => {
     const response = await api.put<EmployeResponse>(`/employe/${id}`, data);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Erreur lors de la mise à jour de l\'employé');
     }
-    return response.data.data;
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
@@ -84,15 +84,15 @@ export const employes = {
 
   changeStatus: async (id: number, est_actif: boolean): Promise<Employe> => {
     const response = await api.put<EmployeResponse>(`/employe/${id}/status`, { est_actif });
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error('Erreur lors du changement de statut');
     }
-    return response.data.data;
+    return response.data;
   },
 
   getActivities: async (id: number): Promise<JournalActivite[]> => {
     const response = await api.get<JournalActiviteResponse>(`/employe/${id}/activities`);
-    return response.data.data;
+    return response.data;
   },
 
   // Fonctions utilitaires

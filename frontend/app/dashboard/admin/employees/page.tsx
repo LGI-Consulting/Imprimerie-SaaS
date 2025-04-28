@@ -1,8 +1,6 @@
 "use client";
 
 import { EmployeesList } from "@/components/dashboard/employees/employees-list";
-import { EmployeeFilters } from "@/components/dashboard/employees/employee-filters";
-import { EmployeeSearch } from "@/components/dashboard/employees/employee-search";
 import { useState } from "react";
 import type { Role } from "@/lib/api/types/employee.types";
 
@@ -51,15 +49,6 @@ export default function EmployeesPage() {
       </div>
 
       <div className="space-y-6">
-        <EmployeeSearch
-          onSearch={handleSearch}
-          onReset={handleResetSearch}
-        />
-
-        <EmployeeFilters
-          onFiltersChange={handleFiltersChange}
-          onReset={handleResetFilters}
-        />
 
         <EmployeesList />
       </div>

@@ -31,7 +31,7 @@ const employeeSchema = z.object({
   email: z.string().email("Email invalide"),
   telephone: z.string().min(10, "Le numéro de téléphone doit contenir au moins 10 caractères"),
   role: z.enum(["admin", "accueil", "caisse", "graphiste"]),
-  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères").optional(),
+  password: z.string().optional(),
   date_embauche: z.string().min(1, "La date d'embauche est requise"),
   notes: z.string().optional(),
 })

@@ -30,11 +30,6 @@ import { Switch } from "@/components/ui/switch";
 const filtersSchema = z.object({
   role: z.enum(["admin", "accueil", "caisse", "graphiste"]).optional(),
   est_actif: z.boolean().optional(),
-  date_embauche_debut: z.string().optional(),
-  date_embauche_fin: z.string().optional(),
-  tri: z.enum(["nom_asc", "nom_desc", "date_asc", "date_desc"]).optional(),
-  departement: z.string().optional(),
-  performance_min: z.number().min(0).max(100).optional(),
 });
 
 type FiltersFormValues = z.infer<typeof filtersSchema>;
@@ -52,11 +47,6 @@ export function EmployeeFilters({ onFiltersChange, onReset }: EmployeeFiltersPro
     defaultValues: {
       role: undefined,
       est_actif: undefined,
-      date_embauche_debut: "",
-      date_embauche_fin: "",
-      tri: undefined,
-      departement: "",
-      performance_min: undefined,
     },
   });
 
@@ -137,98 +127,8 @@ export function EmployeeFilters({ onFiltersChange, onReset }: EmployeeFiltersPro
                 )}
               />
 
-              {/* Filtre par département */}
-              <FormField
-                control={form.control}
-                name="departement"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Département</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nom du département" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Filtre par date d'embauche */}
-              <FormField
-                control={form.control}
-                name="date_embauche_debut"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date d'embauche (début)</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="date_embauche_fin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date d'embauche (fin)</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Filtre par performance */}
-              <FormField
-                control={form.control}
-                name="performance_min"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Performance minimale (%)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Tri */}
-              <FormField
-                control={form.control}
-                name="tri"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tri</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un tri" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="nom_asc">Nom (A-Z)</SelectItem>
-                        <SelectItem value="nom_desc">Nom (Z-A)</SelectItem>
-                        <SelectItem value="date_asc">Date d'embauche (Plus ancien)</SelectItem>
-                        <SelectItem value="date_desc">Date d'embauche (Plus récent)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+             
+             
             </div>
 
             {/* Boutons d'action */}
