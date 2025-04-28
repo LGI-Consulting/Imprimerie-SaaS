@@ -432,7 +432,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                             </div>
                           ) : clientsList && clientsList.length > 0 ? (
                             clientsList.map((client) => (
-                              <SelectItem key={client.id} value={client.id.toString()}>
+                              <SelectItem key={client.client_id} value={client.id.toString()}>
                                 {client.nom} {client.prenom}
                           </SelectItem>
                             ))
