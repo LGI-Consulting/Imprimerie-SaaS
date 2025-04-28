@@ -1,175 +1,122 @@
 // lib/api/materiaux.ts
-import api from './config';
-import type { 
-  Materiau, 
-  StockMateriau
-} from './types';
+import api from "./config";
+import type { Material, MaterialStock } from "./types";
 
 // Types pour les requêtes
-export interface MateriauCreate {
+export interface MaterialCreateData {
   type_materiau: string;
-  nom?: string;
   description?: string;
   prix_unitaire: number;
   unite_mesure: string;
   options_disponibles?: Record<string, any>;
-  stocks?: {
+  largeurs: {
     largeur: number;
-    quantite_en_stock?: number;
-    seuil_alerte?: number;
-    unite_mesure?: string;
+    quantite_en_stock: number;
+    seuil_alerte: number;
   }[];
 }
 
-export interface MateriauUpdate extends Partial<Omit<MateriauCreate, 'stocks'>> {
-  stocks?: {
+export interface MaterialUpdateData
+  extends Partial<Omit<MaterialCreateData, "largeurs">> {
+  largeurs?: {
     stock_id?: number;
     largeur: number;
-    quantite_en_stock?: number;
-    seuil_alerte?: number;
-    unite_mesure?: string;
+    quantite_en_stock: number;
+    seuil_alerte: number;
   }[];
 }
 
-// Types pour les réponses
-export interface MateriauResponse {
+export interface MaterialResponse {
   success: boolean;
   message?: string;
-  data?: Materiau & {
-    stocks: StockMateriau[];
-  };
+  data?: Material;
 }
 
-export interface MateriauxResponse {
+export interface MaterialListResponse {
   success: boolean;
-  count: number;
-  data: (Materiau & {
-    stocks: StockMateriau[];
-  })[];
+  message?: string;
+  data: Material[];
 }
 
-// Types pour les mouvements de stock
-export interface MouvementStock {
-  mouvement_id: number;
-  stock_id: number;
-  type_mouvement: 'entrée' | 'sortie' | 'ajustement';
-  quantite: number;
-  date_mouvement: string;
-  commande_id?: number;
-  employe_id?: number;
-  commentaire?: string;
-  numero_commande?: string;
-  employe_nom?: string;
-  employe_prenom?: string;
-}
-
-export interface MouvementStockCreate {
-  stock_id: number;
-  type_mouvement: 'entrée' | 'sortie' | 'ajustement';
+export interface StockMovementData {
+  type_mouvement: "entrée" | "sortie" | "ajustement";
   quantite: number;
   commentaire?: string;
-  commande_id?: number;
-  employe_id?: number;
 }
 
-export interface MouvementsResponse {
-  success: boolean;
-  data: MouvementStock[];
-}
-
-export interface StockResponse {
-  success: boolean;
-  data: StockMateriau & {
-    materiau_nom: string;
-    type_materiau: string;
-    materiau_unite_mesure: string;
-  };
-}
-
-// Types pour les filtres
-export interface MateriauFilters {
-  term?: string;
-}
-
-// Fonctions pour les matériaux
-export const materiaux = {
-  getAll: async (): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiaux');
+const materiaux = {
+  async getAll(): Promise<Material[]> {
+    const response = await api.get<MaterialListResponse>("/materiaux");
     return response.data.data;
   },
 
-  getById: async (id: number): Promise<Materiau> => {
-    const response = await api.get<MateriauResponse>(`/materiaux/${id}`);
+  async getById(id: number): Promise<Material> {
+    const response = await api.get<MaterialResponse>(`/materiaux/${id}`);
     if (!response.data.data) {
-      throw new Error('Matériau non trouvé');
+      throw new Error("Matériau non trouvé");
     }
     return response.data.data;
   },
 
-  search: async (term: string): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiaux/search', {
-      params: { term }
+  async create(data: MaterialCreateData): Promise<Material> {
+    const response = await api.post<MaterialResponse>("/materiaux", data);
+    if (!response.data.data) {
+      throw new Error("Erreur lors de la création du matériau");
+    }
+    return response.data.data;
+  },
+
+  async update(id: number, data: MaterialUpdateData): Promise<Material> {
+    const response = await api.put<MaterialResponse>(`/materiaux/${id}`, data);
+    if (!response.data.data) {
+      throw new Error("Erreur lors de la mise à jour du matériau");
+    }
+    return response.data.data;
+  },
+
+  async delete(id: number): Promise<void> {
+    await api.delete(`/materiaux/${id}`);
+  },
+
+  async search(query: string): Promise<Material[]> {
+    const response = await api.get<MaterialListResponse>("/materiaux/search", {
+      params: { q: query },
     });
     return response.data.data;
   },
 
-  getLowStock: async (): Promise<Materiau[]> => {
-    const response = await api.get<MateriauxResponse>('/materiaux/stock/low');
-    return response.data.data;
+  async addStockMovement(
+    stockId: number,
+    data: StockMovementData
+  ): Promise<void> {
+    await api.post(`/stocks/${stockId}/mouvements`, data);
   },
 
-  create: async (data: MateriauCreate): Promise<Materiau> => {
-    const response = await api.post<MateriauResponse>('/materiaux', data);
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la création du matériau');
+  async moveStock(materiauId: number, stockId: number, quantite: number) {
+    return api.patch(`/materiaux/${materiauId}/stocks/${stockId}/move`, {
+      quantite,
+    });
+  },
+
+  async addStock(
+    materiauId: number,
+    data: {
+      largeur: number;
+      seuil_alerte: number;
+      quantite_en_stock: number;
+      unite_mesure: string;
     }
-    return response.data.data;
+  ) {
+    return api.post(`/materiaux/${materiauId}/stocks`, data);
   },
 
-  update: async (id: number, data: MateriauUpdate): Promise<Materiau> => {
-    const response = await api.put<MateriauResponse>(`/materiaux/${id}`, data);
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la mise à jour du matériau');
-    }
-    return response.data.data;
+  async updateStock(
+    materiauId: number,
+    stockId: number,
+    data: { seuil_alerte?: number; quantite_en_stock?: number }
+  ) {
+    return api.patch(`/materiaux/${materiauId}/stocks/${stockId}`, data);
   },
-
-  delete: async (id: number): Promise<void> => {
-    await api.delete(`/materiaux/${id}`);
-  },
-
-  // Fonctions pour les mouvements de stock
-  getMouvements: async (stockId: number): Promise<MouvementStock[]> => {
-    const response = await api.get<MouvementsResponse>(`/materiaux/stock/${stockId}/mouvements`);
-    return response.data.data;
-  },
-
-  createMouvement: async (data: MouvementStockCreate): Promise<MouvementStock> => {
-    const response = await api.post<{ success: boolean; data: MouvementStock }>('/materiaux/stock/mouvement', data);
-    return response.data.data;
-  },
-
-  getStockById: async (stockId: number): Promise<StockMateriau & {
-    materiau_nom: string;
-    type_materiau: string;
-    materiau_unite_mesure: string;
-  }> => {
-    const response = await api.get<StockResponse>(`/materiaux/stock/${stockId}`);
-    return response.data.data;
-  },
-
-  // Fonctions utilitaires
-  calculateSurfaceArea: (largeur: number, longueur: number): number => {
-    return largeur * longueur;
-  },
-
-  calculatePrice: (surfaceArea: number, prixUnitaire: number): number => {
-    return surfaceArea * prixUnitaire;
-  },
-
-  isLowStock: (quantite: number, seuilAlerte: number): boolean => {
-    return quantite <= seuilAlerte;
-  }
 };
 
 export default materiaux;

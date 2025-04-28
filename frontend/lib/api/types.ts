@@ -1,10 +1,16 @@
 // lib/api/types.ts
-export type Role = 'admin' | 'accueil' | 'caisse' | 'graphiste';
-export type StatutCommande = 'reçue' | 'payée' | 'en_impression' | 'terminée' | 'livrée' | 'annulée';
-export type MethodePaiement = 'espèces' | 'Flooz' | 'Mixx';
-export type StatutPaiement = 'en_attente' | 'validé' | 'échoué';
-export type TypeMouvement = 'entrée' | 'sortie' | 'ajustement';
-export type TypeRemise = 'pourcentage' | 'montant_fixe';
+export type Role = "admin" | "accueil" | "caisse" | "graphiste";
+export type StatutCommande =
+  | "reçue"
+  | "payée"
+  | "en_impression"
+  | "terminée"
+  | "livrée"
+  | "annulée";
+export type MethodePaiement = "espèces" | "Flooz" | "Mixx";
+export type StatutPaiement = "en_attente" | "validé" | "échoué";
+export type TypeMouvement = "entrée" | "sortie" | "ajustement";
+export type TypeRemise = "pourcentage" | "montant_fixe";
 
 export interface Employe {
   employe_id: number;
@@ -29,27 +35,56 @@ export interface Client {
   derniere_visite: string;
 }
 
-export interface Materiau {
-  materiau_id: number;
-  type_materiau: string;
-  nom: string | null;
-  description: string | null;
-  prix_unitaire: number;
-  unite_mesure: string;
-  options_disponibles: Record<string, any>;
-  date_creation: string;
-  date_modification: string;
-}
-
-export interface StockMateriau {
+export interface MaterialStock {
   stock_id: number;
-  materiau_id: number;
   largeur: number;
   quantite_en_stock: number;
   seuil_alerte: number;
   unite_mesure: string;
   date_creation: string;
   date_modification: string;
+}
+
+export interface Material {
+  materiau_id: number;
+  type_materiau: string;
+  description?: string;
+  prix_unitaire: number;
+  unite_mesure: string;
+  options_disponibles: Record<string, any>;
+  date_creation: string;
+  date_modification: string;
+  stocks: MaterialStock[];
+}
+
+export interface MaterialMovement {
+  mouvement_id: number;
+  stock_id: number;
+  type_mouvement: TypeMouvement;
+  quantite: number;
+  commentaire?: string;
+  date_mouvement: string;
+  employe_id?: number;
+  commande_id?: number;
+}
+
+export interface MaterialFormData {
+  type_materiau: string;
+  description?: string;
+  prix_unitaire: number;
+  unite_mesure: string;
+  options_disponibles?: Record<string, any>;
+  largeurs: {
+    largeur: number;
+    quantite_en_stock: number;
+    seuil_alerte: number;
+  }[];
+}
+
+export interface StockMovementFormData {
+  type_mouvement: TypeMouvement;
+  quantite: number;
+  commentaire?: string;
 }
 
 export interface Commande {
@@ -122,17 +157,6 @@ export interface Facture {
   date_paiement: string | null;
 }
 
-export interface MouvementStock {
-  mouvement_id: number;
-  stock_id: number | null;
-  type_mouvement: TypeMouvement;
-  quantite: number;
-  date_mouvement: string;
-  commande_id: number | null;
-  employe_id: number | null;
-  commentaire: string | null;
-}
-
 export interface Remise {
   remise_id: number;
   type: TypeRemise;
@@ -175,6 +199,6 @@ export interface PaiementsFilter {
   searchTerm?: string;
 }
 
-export interface MaterialWithStocks extends Materiau {
-  stocks: StockMateriau[];
+export interface MaterialWithStocks extends Material {
+  stocks: MaterialStock[];
 }
