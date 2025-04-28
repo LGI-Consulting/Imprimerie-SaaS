@@ -207,6 +207,18 @@ export const commandes = {
     return response.data.data;
   },
 
+  // Ajoutez cette fonction dans l'objet commandes
+updateStatus: async (id: number, newStatus: string): Promise<CommandeResponse['data']> => {
+  const response = await api.patch<CommandeResponse>(`/commandes/${id}/status`, {
+    statut: newStatus
+  });
+
+  if (!response.data.data) {
+    throw new Error(`Erreur lors de la mise à jour du statut de la commande vers "${newStatus}"`);
+  }
+  return response.data.data;
+},
+
   delete: async (id: number): Promise<void> => {
     await api.delete(`/commandes/${id}`);
   },

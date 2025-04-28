@@ -152,8 +152,8 @@ export function OrdersList({
 
   // Gérer les filtres
   const handleFilterChange = (key: keyof CommandeFilters, value: string | number | undefined) => {
-    // Si l'utilisateur est un graphiste, ne pas permettre de changer le filtre de statut
-    if (userRole === "graphiste" && key === "statut") {
+    // Si l'utilisateur est un graphiste, ne pas permettre de changer les filtres
+    if (userRole === "graphiste") {
       return
     }
     
@@ -275,6 +275,42 @@ export function OrdersList({
     )
   }
 
+  const handleStartPrinting = async (order: CommandeWithDetails) => {
+    try {
+      await commandes.updateStatus(order.commande_id, "en_impression");
+      toast.success("Impression lancée avec succès");
+      
+     
+      
+      if (onStatusChange) {
+        onStatusChange(order.commande_id, "en_impression");
+      }
+      
+      loadOrders();
+    } catch (err) {
+      console.error("Erreur lors du lancement de l'impression:", err);
+      toast.error("Erreur lors du changement de statut");
+    }
+  };
+  
+  const handleFinishPrinting = async (order: CommandeWithDetails) => {
+    try {
+      await commandes.updateStatus(order.commande_id, "terminée");
+      toast.success("Commande marquée comme terminée");
+      
+      
+      
+      if (onStatusChange) {
+        onStatusChange(order.commande_id, "terminée");
+      }
+      
+      loadOrders();
+    } catch (err) {
+      console.error("Erreur lors de la finalisation de l'impression:", err);
+      toast.error("Erreur lors du changement de statut");
+    }
+  };
+
   // Rendre les actions en fonction du rôle
   const renderActions = (order: CommandeWithDetails) => {
     const actions = [
@@ -283,33 +319,50 @@ export function OrdersList({
         icon: Eye,
         onClick: () => handleViewOrder(order)
       }
-    ]
-
+    ];
+  
+    // Ajouter les actions spécifiques aux graphistes
+    if (userRole === "graphiste") {
+      if (order.statut === "payée") {
+        actions.push({
+          label: "Lancer l'impression",
+          icon: Printer,
+          onClick: () => handleStartPrinting(order)
+        });
+      } else if (order.statut === "en_impression") {
+        actions.push({
+          label: "Terminer l'impression",
+          icon: FileText,
+          onClick: () => handleFinishPrinting(order)
+        });
+      }
+    }
+  
     // Les admins et l'accueil peuvent modifier
     if (userRole === "admin" || userRole === "accueil") {
       actions.push({
         label: "Modifier",
         icon: Edit2,
         onClick: () => handleEditOrder(order)
-      })
+      });
     }
-
+  
     // Seuls les admins peuvent supprimer
     if (userRole === "admin") {
       actions.push({
         label: "Supprimer",
         icon: Trash2,
         onClick: () => handleDeleteOrder(order)
-      })
+      });
     }
-
+  
     // Tout le monde peut exporter en PDF
     actions.push({
       label: "Exporter en PDF",
       icon: FileText,
       onClick: () => handleExportPDF(order)
-    })
-
+    });
+  
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -332,7 +385,8 @@ export function OrdersList({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    )
+    );
+    
   }
 
   const handleFileReject = (orderId: number, fileName: string) => {
@@ -349,17 +403,17 @@ export function OrdersList({
 
   return (
     <div className="space-y-4">
-      {/* Filtres - Masquer le filtre de statut pour les graphistes */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-2">
-          <Input
-            placeholder="ID Client"
-            type="number"
-            value={filters.client_id || ""}
-            onChange={(e) => handleFilterChange("client_id", e.target.value ? Number(e.target.value) : undefined)}
-            className="max-w-sm"
-          />
-          {userRole !== "graphiste" && (
+      {/* Filtres - Masquer complètement pour les graphistes */}
+      {userRole !== "graphiste" && (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 items-center gap-2">
+            <Input
+              placeholder="ID Client"
+              type="number"
+              value={filters.client_id || ""}
+              onChange={(e) => handleFilterChange("client_id", e.target.value ? Number(e.target.value) : undefined)}
+              className="max-w-sm"
+            />
             <Select
               value={filters.statut || ""}
               onValueChange={(value) => handleFilterChange("statut", value || undefined)}
@@ -376,20 +430,20 @@ export function OrdersList({
                 ))}
               </SelectContent>
             </Select>
+            <Input
+              placeholder="Code de remise"
+              value={filters.code_remise || ""}
+              onChange={(e) => handleFilterChange("code_remise", e.target.value || undefined)}
+              className="max-w-sm"
+            />
+          </div>
+          {(userRole === "admin" || userRole === "accueil") && (
+            <Button onClick={() => setAddDialogOpen(true)}>
+              Nouvelle commande
+            </Button>
           )}
-          <Input
-            placeholder="Code de remise"
-            value={filters.code_remise || ""}
-            onChange={(e) => handleFilterChange("code_remise", e.target.value || undefined)}
-            className="max-w-sm"
-          />
         </div>
-        {(userRole === "admin" || userRole === "accueil") && (
-          <Button onClick={() => setAddDialogOpen(true)}>
-            Nouvelle commande
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Table */}
       <div className="rounded-md border">
