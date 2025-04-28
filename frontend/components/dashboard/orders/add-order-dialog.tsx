@@ -105,9 +105,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
   // Charger la liste des matériaux
   const loadMateriaux = useCallback(async () => {
     try {
-      const response = await fetch('/api/materiaux')
-      if (!response.ok) throw new Error('Erreur lors du chargement des matériaux')
-      const data = await response.json()
+      const response = await materiaux.getAll()
+      if (!response) throw new Error('Erreur lors du chargement des matériaux')
+      const data = await response
       setMateriauList(data)
     } catch (error) {
       console.error('Erreur lors du chargement des matériaux:', error)

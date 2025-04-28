@@ -115,7 +115,7 @@ export function OrdersList({
         code_remise: undefined
       }
       
-      const response = await commandes.getAll(apiFilters)
+      const response = await commandes.getAll()
       const commandesData = response as unknown as (Commande & { client: Client })[]
       
       // Filtrer par code de remise côté client si nécessaire
@@ -126,12 +126,12 @@ export function OrdersList({
         )
       }
       
-      setOrders(filteredData.map(cmd => ({
+      filteredData && setOrders(filteredData.map(cmd => ({
         ...cmd,
         details: [], // Les détails seront chargés lors de l'ouverture du dialog
         remise: cmd.remise
       })))
-      setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
+      filteredData && setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
     } catch (err) {
       console.error("Erreur lors du chargement des commandes:", err)
       setError("Impossible de charger les commandes")
@@ -357,7 +357,7 @@ export function OrdersList({
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous les statuts</SelectItem>
+              <SelectItem value="all">Tous les statuts</SelectItem>
               {STATUS_OPTIONS.map((status) => (
                 <SelectItem key={status.value} value={status.value}>
                   {status.label}

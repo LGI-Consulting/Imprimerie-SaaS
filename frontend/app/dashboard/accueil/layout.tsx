@@ -23,6 +23,7 @@ export default function AccueilLayout({ children }: AccueilLayoutProps) {
   const { user, isLoading, isAuthenticated, hasRole } = useAuth()
 
   useEffect(() => {
+    user && console.log(user.role)
     if (!isLoading && (!isAuthenticated || !user || !hasRole(["accueil", "admin"]))) {
       router.push(ROUTES.LOGIN)
     }

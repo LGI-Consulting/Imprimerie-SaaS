@@ -37,7 +37,8 @@ export function ClientsList({ filters }: ClientsListProps) {
     try {
       let data = await clients.getAll()
       
-      // Appliquer les filtres
+      if (data){
+        // Appliquer les filtres
       if (filters) {
         if (filters.search) {
           data = data.filter(client => 
@@ -69,6 +70,8 @@ export function ClientsList({ filters }: ClientsListProps) {
             break
         }
       }
+      }
+      
 
       setClientsList(data)
       setError(null)
@@ -204,12 +207,25 @@ export function ClientsList({ filters }: ClientsListProps) {
         </div>
       )}
 
+     { clientsList && (
       <ClientDataTable
-        data={clientsList}
-        onViewClient={handleViewClient}
-        onEditClient={handleEditClient}
-        onDeleteClient={handleDeleteClient}
-      />
+      data={clientsList}
+      onViewClient={handleViewClient}
+      onEditClient={handleEditClient}
+      onDeleteClient={handleDeleteClient}
+    />
+     )
+     }
+
+{ !clientsList && (
+      <ClientDataTable
+      data={[]}
+      onViewClient={handleViewClient}
+      onEditClient={handleEditClient}
+      onDeleteClient={handleDeleteClient}
+    />
+     )
+     }
 
       {/* Dialogues */}
       <AddClientDialog

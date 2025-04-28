@@ -54,7 +54,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     },
     {
       title: "Commandes",
-      href: ROUTES.CAISSE.ORDERS,
+      href: ROUTES.ACCUEIL.ORDERS,
       icon: FileText,
     },
     {

@@ -12,14 +12,10 @@ import { useState } from "react"
 import { useNotificationStore } from "@/lib/store/notifications"
 
 export default function OrdersPage() {
-  const { user } = useAuth()
-  const router = useRouter()
+
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const { addNotification } = useNotificationStore()
 
-  if (!user || user.role !== "accueil") {
-    return <UnauthorizedAlert onDismiss={() => router.push("/")} />
-  }
 
   const handleAddOrder = async (orderData: any) => {
     try {
