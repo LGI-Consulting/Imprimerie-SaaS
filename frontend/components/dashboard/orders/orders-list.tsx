@@ -96,7 +96,7 @@ export function OrdersList({
   const [filters, setFilters] = useState<CommandeFilters>({
     startDate: undefined,
     endDate: undefined,
-    statut: undefined,
+    statut: userRole === "graphiste" ? "payée" : undefined,
     client_id: undefined,
     materiau_id: undefined,
     sortBy: "date_creation",
@@ -116,7 +116,12 @@ export function OrdersList({
       }
       
       const response = await commandes.getAll()
-      const commandesData = response as unknown as (Commande & { client: Client })[]
+      let commandesData = response as unknown as (Commande & { client: Client })[]
+      
+      // Si l'utilisateur est un graphiste, filtrer pour n'afficher que les commandes payées
+      if (userRole === "graphiste") {
+        commandesData = commandesData.filter(cmd => cmd.statut === "payée")
+      }
       
       // Filtrer par code de remise côté client si nécessaire
       let filteredData = commandesData
@@ -139,7 +144,7 @@ export function OrdersList({
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [filters, userRole])
 
   useEffect(() => {
     loadOrders()
@@ -147,6 +152,11 @@ export function OrdersList({
 
   // Gérer les filtres
   const handleFilterChange = (key: keyof CommandeFilters, value: string | number | undefined) => {
+    // Si l'utilisateur est un graphiste, ne pas permettre de changer le filtre de statut
+    if (userRole === "graphiste" && key === "statut") {
+      return
+    }
+    
     setFilters(prev => ({ ...prev, [key]: value }))
     setCurrentPage(1) // Réinitialiser la pagination
   }
@@ -339,7 +349,7 @@ export function OrdersList({
 
   return (
     <div className="space-y-4">
-      {/* Filtres */}
+      {/* Filtres - Masquer le filtre de statut pour les graphistes */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center gap-2">
           <Input
@@ -349,22 +359,24 @@ export function OrdersList({
             onChange={(e) => handleFilterChange("client_id", e.target.value ? Number(e.target.value) : undefined)}
             className="max-w-sm"
           />
-          <Select
-            value={filters.statut || ""}
-            onValueChange={(value) => handleFilterChange("statut", value || undefined)}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              {STATUS_OPTIONS.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {userRole !== "graphiste" && (
+            <Select
+              value={filters.statut || ""}
+              onValueChange={(value) => handleFilterChange("statut", value || undefined)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                {STATUS_OPTIONS.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>
+                    {status.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Input
             placeholder="Code de remise"
             value={filters.code_remise || ""}
