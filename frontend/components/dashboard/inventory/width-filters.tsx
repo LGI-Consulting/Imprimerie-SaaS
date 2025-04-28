@@ -96,7 +96,7 @@ export function WidthFilters({
                 <SelectValue placeholder="Sélectionner un matériau" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les matériaux</SelectItem>
+                <SelectItem value="all">Tous les matériaux</SelectItem>
                 {materials.map((material) => (
                   <SelectItem key={material.materiau_id} value={material.materiau_id.toString()}>
                     {material.nom || material.type_materiau}

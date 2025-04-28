@@ -134,12 +134,7 @@ export default function InventoryPage() {
               <div className="col-span-full">
                 <MaterialSearch onSelect={handleMaterialSelect} />
               </div>
-              <div className="col-span-full md:col-span-1">
-                <StockFilters 
-                  onFiltersChange={handleStockFiltersChange}
-                  materialTypes={materialTypes}
-                />
-              </div>
+              
             </div>
             <div className="col-span-full">
               <StockList />
@@ -149,12 +144,8 @@ export default function InventoryPage() {
           {/* Onglet Matériaux */}
           <TabsContent value="materials" className="space-y-4">
             <div className="flex justify-end">
-              <button
-                onClick={() => setShowMaterialForm(true)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
-              >
-                Nouveau matériau
-              </button>
+              
+              
             </div>
             <MaterialList />
           </TabsContent>
@@ -162,12 +153,7 @@ export default function InventoryPage() {
           {/* Onglet Largeurs */}
           <TabsContent value="widths" className="space-y-4">
             <div className="flex justify-end">
-              <button
-                onClick={() => setShowWidthForm(true)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
-              >
-                Nouvelle largeur
-              </button>
+             
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="col-span-full md:col-span-1">

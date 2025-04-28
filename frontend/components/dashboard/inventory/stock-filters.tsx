@@ -98,7 +98,7 @@ export function StockFilters({
                 <SelectValue placeholder="Sélectionner un type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 {materialTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}

@@ -291,7 +291,7 @@ export function StockList() {
                 <SelectValue placeholder="Type de matériau" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 {materialTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}
@@ -307,7 +307,7 @@ export function StockList() {
                 <SelectValue placeholder="État du stock" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les stocks</SelectItem>
+                <SelectItem value="all">Tous les stocks</SelectItem>
                 <SelectItem value="low">Stock bas</SelectItem>
                 <SelectItem value="out">Rupture</SelectItem>
               </SelectContent>
@@ -320,7 +320,7 @@ export function StockList() {
                 <SelectValue placeholder="Largeur" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Toutes les largeurs</SelectItem>
+                <SelectItem value="all">Toutes les largeurs</SelectItem>
                 {widths.map((width) => (
                   <SelectItem key={width} value={width.toString()}>
                     {width}m
