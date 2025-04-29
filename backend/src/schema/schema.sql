@@ -14,6 +14,8 @@ CREATE TABLE employes (
 -- Table Clients
 CREATE TABLE clients (
     client_id SERIAL PRIMARY KEY,
+    dette DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    depot DECIMAL(10, 2) NOT NULL DEFAULT 0,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
     email VARCHAR(100),
@@ -41,7 +43,7 @@ CREATE TABLE stocks_materiaux_largeur (
     stock_id SERIAL PRIMARY KEY,
     materiau_id INTEGER NOT NULL REFERENCES materiaux(materiau_id) ON DELETE CASCADE,
     largeur DECIMAL(10, 2) NOT NULL,
-    quantite_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    longeur_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
     seuil_alerte DECIMAL(10, 2) NOT NULL DEFAULT 0,
     unite_mesure VARCHAR(20) NOT NULL,
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -56,6 +58,7 @@ CREATE TABLE commandes (
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     numero_commande VARCHAR(50) UNIQUE,
     statut VARCHAR(20) NOT NULL CHECK (statut IN ('reçue', 'payée', 'en_impression', 'terminée', 'livrée')),
+    situation_paiement VARCHAR(20) NOT NULL CHECK (situation_paiement IN ('credit', 'comptant')),
     priorite INTEGER DEFAULT 0,
     commentaires TEXT,
     employe_reception_id INTEGER REFERENCES employes(employe_id),
@@ -95,6 +98,8 @@ CREATE TABLE paiements (
     paiement_id SERIAL PRIMARY KEY,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
     montant DECIMAL(10, 2) NOT NULL,
+    monnaie_rendue DECIMAL(10, 2) NOT NULL,
+    reste_a_payer DECIMAL(10, 2) NOT NULL,
     methode VARCHAR(20) NOT NULL CHECK (methode IN ('espèces', 'Flooz', 'Mixx')),
     reference_transaction VARCHAR(100),
     date_paiement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -102,19 +107,17 @@ CREATE TABLE paiements (
     employe_id INTEGER REFERENCES employes(employe_id)
 );
 
--- Table Factures
+-- Table Factures (correction)
 CREATE TABLE factures (
     facture_id SERIAL PRIMARY KEY,
-    commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
+    paiement_id INTEGER NOT NULL REFERENCES paiements(paiement_id) ON DELETE CASCADE,
     numero_facture VARCHAR(50) NOT NULL,
     date_emission TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     montant_total DECIMAL(10, 2) NOT NULL,
     montant_taxe DECIMAL(10, 2) NOT NULL DEFAULT 0,
     remise DECIMAL(10, 2) NOT NULL DEFAULT 0,
     montant_final DECIMAL(10, 2) NOT NULL,
-    chemin_pdf VARCHAR(255),
-    date_paiement TIMESTAMP,
-    UNIQUE (numero_facture, commande_id)
+    UNIQUE (numero_facture)
 );
 
 -- Table Mouvements de Stock
@@ -153,13 +156,28 @@ CREATE TABLE sessions_utilisateurs (
     appareil VARCHAR(255)
 );
 
--- Table Journal des Activités
+-- Table Journal des Activités (améliorée)
 CREATE TABLE journal_activites (
     log_id SERIAL PRIMARY KEY,
     employe_id INTEGER REFERENCES employes(employe_id),
     action VARCHAR(100) NOT NULL,
     date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    details TEXT,
+    details JSONB, -- Utiliser JSONB pour stocker des détails structurés
     entite_affectee VARCHAR(50),
-    entite_id INTEGER
+    entite_id INTEGER,
+    transaction_id INTEGER -- Pour lier à une transaction financière si applicable
+);
+
+-- Table Transactions Financières Clients
+CREATE TABLE transactions_clients (
+    transaction_id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL REFERENCES clients(client_id),
+    type_transaction VARCHAR(20) NOT NULL CHECK (type_transaction IN ('depot', 'retrait', 'imputation_dette', 'paiement_dette')),
+    montant DECIMAL(10, 2) NOT NULL,
+    solde_avant DECIMAL(10, 2) NOT NULL,
+    solde_apres DECIMAL(10, 2) NOT NULL,
+    date_transaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    employe_id INTEGER REFERENCES employes(employe_id),
+    commentaire TEXT,
+    reference_transaction VARCHAR(100)
 );

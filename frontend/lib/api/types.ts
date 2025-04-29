@@ -5,12 +5,17 @@ export type StatutCommande =
   | "payée"
   | "en_impression"
   | "terminée"
-  | "livrée"
-  | "annulée";
+  | "livrée";
+export type SituationPaiement = "credit" | "comptant";
 export type MethodePaiement = "espèces" | "Flooz" | "Mixx";
 export type StatutPaiement = "en_attente" | "validé" | "échoué";
 export type TypeMouvement = "entrée" | "sortie" | "ajustement";
 export type TypeRemise = "pourcentage" | "montant_fixe";
+export type TypeTransaction =
+  | "depot"
+  | "retrait"
+  | "imputation_dette"
+  | "paiement_dette";
 
 export interface Employe {
   employe_id: number;
@@ -26,6 +31,8 @@ export interface Employe {
 
 export interface Client {
   client_id: number;
+  dette: number;
+  depot: number;
   nom: string;
   prenom: string;
   email: string | null;
@@ -35,76 +42,76 @@ export interface Client {
   derniere_visite: string;
 }
 
-export interface MaterialStock {
+export interface Materiau {
+  materiau_id: number;
+  type_materiau: string;
+  nom: string | null;
+  description: string | null;
+  prix_unitaire: number;
+  unite_mesure: string;
+  options_disponibles: Record<string, any>;
+  date_creation: string;
+  date_modification: string;
+}
+
+export interface StockMateriauxLargeur {
   stock_id: number;
+  materiau_id: number;
   largeur: number;
-  quantite_en_stock: number;
+  longeur_en_stock: number;
   seuil_alerte: number;
   unite_mesure: string;
   date_creation: string;
   date_modification: string;
 }
 
-export interface Material {
-  materiau_id: number;
-  type_materiau: string;
-  description?: string;
-  prix_unitaire: number;
-  unite_mesure: string;
-  options_disponibles: Record<string, any>;
-  date_creation: string;
-  date_modification: string;
-  stocks: MaterialStock[];
-}
-
-export interface MaterialMovement {
+export interface MouvementStock {
   mouvement_id: number;
   stock_id: number;
   type_mouvement: TypeMouvement;
   quantite: number;
-  commentaire?: string;
   date_mouvement: string;
-  employe_id?: number;
-  commande_id?: number;
+  commande_id: number | null;
+  employe_id: number | null;
+  commentaire: string | null;
 }
 
-export interface MaterialFormData {
+export interface MateriauxFormData {
   type_materiau: string;
+  nom?: string;
   description?: string;
   prix_unitaire: number;
   unite_mesure: string;
   options_disponibles?: Record<string, any>;
-  largeurs: {
+  stocks: {
     largeur: number;
-    quantite_en_stock: number;
+    longeur_en_stock: number;
     seuil_alerte: number;
+    unite_mesure: string;
   }[];
 }
 
-export interface StockMovementFormData {
+export interface MouvementStockFormData {
+  stock_id: number;
   type_mouvement: TypeMouvement;
   quantite: number;
+  commande_id?: number;
   commentaire?: string;
 }
 
 export interface Commande {
   commande_id: number;
-  client_id: number;
+  client_id: number | null;
   date_creation: string;
   numero_commande: string;
   statut: StatutCommande;
+  situation_paiement: SituationPaiement;
   priorite: number;
   commentaires: string | null;
   employe_reception_id: number | null;
   employe_caisse_id: number | null;
   employe_graphiste_id: number | null;
   est_commande_speciale: boolean;
-  remise?: {
-    type: TypeRemise;
-    valeur: number;
-    code?: string;
-    montant_applique: number;
-  };
 }
 
 export interface PrintFile {
@@ -123,7 +130,6 @@ export interface DetailCommande {
   detail_id: number;
   commande_id: number;
   materiau_id: number | null;
-  travail_id: number | null;
   quantite: number;
   dimensions: string | null;
   prix_unitaire: number;
@@ -135,26 +141,24 @@ export interface Paiement {
   paiement_id: number;
   commande_id: number;
   montant: number;
+  monnaie_rendue: number;
+  reste_a_payer: number;
   methode: MethodePaiement;
   reference_transaction: string | null;
   date_paiement: string;
   statut: StatutPaiement;
   employe_id: number | null;
-  montant_recu: number;
-  monnaie_rendue: number;
 }
 
 export interface Facture {
   facture_id: number;
-  commande_id: number;
+  paiement_id: number;
   numero_facture: string;
   date_emission: string;
   montant_total: number;
   montant_taxe: number;
   remise: number;
   montant_final: number;
-  chemin_pdf: string | null;
-  date_paiement: string | null;
 }
 
 export interface Remise {
@@ -184,21 +188,74 @@ export interface JournalActivite {
   employe_id: number | null;
   action: string;
   date_action: string;
-  details: string | null;
+  details: Record<string, any> | null;
   entite_affectee: string | null;
   entite_id: number | null;
+  transaction_id: number | null;
+}
+
+export interface TransactionClient {
+  transaction_id: number;
+  client_id: number;
+  type_transaction: TypeTransaction;
+  montant: number;
+  solde_avant: number;
+  solde_apres: number;
+  date_transaction: string;
+  employe_id: number | null;
+  commentaire: string | null;
+  reference_transaction: string | null;
 }
 
 export interface PaiementsFilter {
-  status?: StatutPaiement;
-  method?: MethodePaiement;
-  startDate?: string;
-  endDate?: string;
-  minAmount?: number;
-  maxAmount?: number;
-  searchTerm?: string;
+  statut?: StatutPaiement;
+  methode?: MethodePaiement;
+  dateDebut?: string;
+  dateFin?: string;
+  montantMin?: number;
+  montantMax?: number;
+  termeRecherche?: string;
 }
 
-export interface MaterialWithStocks extends Material {
-  stocks: MaterialStock[];
+export interface MateriauxAvecStocks extends Materiau {
+  stocks: StockMateriauxLargeur[];
+}
+
+export interface ClientStats {
+  totalOrders: number;
+  totalAmount: number;
+  frequency: {
+    last6Months: number;
+    monthly: string;
+  };
+  materialPreferences: Record<string, number>;
+}
+
+export interface ClientOrder {
+  commande_id: number;
+  date_creation: string;
+  statut: StatutCommande;
+  numero_commande: string;
+  situation_paiement: SituationPaiement;
+  montant_final?: number;
+}
+
+export interface ClientDepotRequest {
+  montant: number;
+  commentaire?: string;
+}
+
+export interface ClientRetraitRequest {
+  montant: number;
+  commentaire?: string;
+}
+
+export interface ClientPayerDetteRequest {
+  montant: number;
+  commentaire?: string;
+}
+
+export interface ClientImputerDetteRequest {
+  montant: number;
+  commentaire?: string;
 }

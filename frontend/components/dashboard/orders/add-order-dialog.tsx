@@ -23,8 +23,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { commandes } from "@/lib/api/commandes"
-import { materiaux } from "@/lib/api/materiaux"
-import { Materiau, Remise } from "@/lib/api/types"
+import  materiaux  from "@/lib/api/materiaux"
+import { Material, Remise } from "@/lib/api/types"
 import { CommandeCreate } from "@/lib/api/commandes"
 import { formatCurrency } from "@/lib/api/utils"
 import { toast } from "sonner"
@@ -68,7 +68,7 @@ interface AddOrderDialogProps {
 }
 
 export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialogProps) {
-  const [materiauList, setMateriauList] = useState<Materiau[]>([])
+  const [materiauList, setMateriauList] = useState<Material[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -487,7 +487,7 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                                         key={materiau.materiau_id} 
                                         value={materiau.materiau_id.toString()}
                                       >
-                                        {materiau.nom || materiau.type_materiau}
+                                        {materiau.type_materiau}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
