@@ -1,14 +1,14 @@
 // lib/api/commandes.ts
-import api from './config';
-import type { 
-  Commande, 
-  DetailCommande, 
-  PrintFile, 
-  Client, 
+import api from "./config";
+import type {
+  Commande,
+  DetailCommande,
+  PrintFile,
+  Client,
   Materiau,
-  Remise 
-} from './types';
-import { remises } from './remises';
+  Remise,
+} from "./types";
+import { remises } from "./remises";
 
 // Types pour les requêtes
 export interface CommandeCreate {
@@ -27,15 +27,18 @@ export interface CommandeCreate {
     commentaires?: string;
   }[];
   priorite?: number;
+  employe_reception_id: number;
   commentaires?: string;
   est_commande_speciale?: boolean;
   files?: File[];
   code_remise?: string;
 }
 
-export interface CommandeUpdate extends Partial<Omit<CommandeCreate, 'clientInfo'>> {
+export interface CommandeUpdate
+  extends Partial<Omit<CommandeCreate, "clientInfo">> {
   statut?: string;
   employe_graphiste_id?: number;
+  employe_caisse_id?: number;
 }
 
 // Types pour les réponses
@@ -67,45 +70,51 @@ export interface CommandeFilters {
   client_id?: number;
   materiau_id?: number;
   sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: "asc" | "desc";
   code_remise?: string;
 }
 
 // Fonctions pour les commandes
 export const commandes = {
   getAll: async (filters?: CommandeFilters): Promise<Commande[]> => {
-    const response = await api.get<CommandesResponse>('/commandes', { 
-      params: filters 
+    const response = await api.get<CommandesResponse>("/commandes", {
+      params: filters,
     });
     return response.data.data;
   },
 
-  getById: async (id: number): Promise<CommandeResponse['data']> => {
+  getById: async (id: number): Promise<CommandeResponse["data"]> => {
     const response = await api.get<CommandeResponse>(`/commandes/${id}`);
     if (!response.data.data) {
-      throw new Error('Commande non trouvée');
+      throw new Error("Commande non trouvée");
     }
     return response.data.data;
   },
 
   getByClient: async (clientId: number): Promise<Commande[]> => {
-    const response = await api.get<CommandesResponse>(`/commandes/client/${clientId}`);
+    const response = await api.get<CommandesResponse>(
+      `/commandes/client/${clientId}`
+    );
     return response.data.data;
   },
 
   getByStatus: async (status: string): Promise<Commande[]> => {
-    const response = await api.get<CommandesResponse>(`/commandes/status/${status}`);
+    const response = await api.get<CommandesResponse>(
+      `/commandes/status/${status}`
+    );
     return response.data.data;
   },
 
   getByMaterial: async (materialType: string): Promise<Commande[]> => {
-    const response = await api.get<CommandesResponse>(`/commandes/material/${materialType}`);
+    const response = await api.get<CommandesResponse>(
+      `/commandes/material/${materialType}`
+    );
     return response.data.data;
   },
 
-  create: async (data: CommandeCreate): Promise<CommandeResponse['data']> => {
+  create: async (data: CommandeCreate): Promise<CommandeResponse["data"]> => {
     const formData = new FormData();
-    
+
     // Vérifier et appliquer la remise si un code est fourni
     let remiseInfo = null;
     if (data.code_remise) {
@@ -116,48 +125,54 @@ export const commandes = {
             remise_id: remise.remise_id,
             code_remise: remise.code_remise,
             type: remise.type,
-            valeur: remise.valeur
+            valeur: remise.valeur,
           };
         }
       } catch (error) {
-        console.warn('Code de remise invalide:', error);
+        console.warn("Code de remise invalide:", error);
       }
     }
 
     // Ajouter les données de base
     Object.entries(data).forEach(([key, value]) => {
-      if (key !== 'files') {
-        formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
+      if (key !== "files") {
+        formData.append(
+          key,
+          typeof value === "object" ? JSON.stringify(value) : value
+        );
       }
     });
 
     // Ajouter les informations de remise
     if (remiseInfo) {
-      formData.append('remise', JSON.stringify(remiseInfo));
+      formData.append("remise", JSON.stringify(remiseInfo));
     }
 
     // Ajouter les fichiers
     if (data.files) {
       data.files.forEach((file) => {
-        formData.append('files', file);
+        formData.append("files", file);
       });
     }
 
-    const response = await api.post<CommandeResponse>('/commandes', formData, {
+    const response = await api.post<CommandeResponse>("/commandes", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
 
     if (!response.data.data) {
-      throw new Error('Erreur lors de la création de la commande');
+      throw new Error("Erreur lors de la création de la commande");
     }
     return response.data.data;
   },
 
-  update: async (id: number, data: CommandeUpdate): Promise<CommandeResponse['data']> => {
+  update: async (
+    id: number,
+    data: CommandeUpdate
+  ): Promise<CommandeResponse["data"]> => {
     const formData = new FormData();
-    
+
     // Vérifier et appliquer la remise si un code est fourni
     let remiseInfo = null;
     if (data.code_remise) {
@@ -168,56 +183,71 @@ export const commandes = {
             remise_id: remise.remise_id,
             code_remise: remise.code_remise,
             type: remise.type,
-            valeur: remise.valeur
+            valeur: remise.valeur,
           };
         }
       } catch (error) {
-        console.warn('Code de remise invalide:', error);
+        console.warn("Code de remise invalide:", error);
       }
     }
 
     // Ajouter les données de base
     Object.entries(data).forEach(([key, value]) => {
-      if (key !== 'files' && value !== undefined) {
-        formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
+      if (key !== "files" && value !== undefined) {
+        formData.append(
+          key,
+          typeof value === "object" ? JSON.stringify(value) : value
+        );
       }
     });
 
     // Ajouter les informations de remise
     if (remiseInfo) {
-      formData.append('remise', JSON.stringify(remiseInfo));
+      formData.append("remise", JSON.stringify(remiseInfo));
     }
 
     // Ajouter les fichiers
     if (data.files) {
       data.files.forEach((file) => {
-        formData.append('files', file);
+        formData.append("files", file);
       });
     }
 
-    const response = await api.put<CommandeResponse>(`/commandes/${id}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.put<CommandeResponse>(
+      `/commandes/${id}`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
 
     if (!response.data.data) {
-      throw new Error('Erreur lors de la mise à jour de la commande');
+      throw new Error("Erreur lors de la mise à jour de la commande");
     }
     return response.data.data;
   },
 
   // Ajoutez cette fonction dans l'objet commandes
-updateStatus: async (id: number, newStatus: string): Promise<CommandeResponse['data']> => {
-  const response = await api.patch<CommandeResponse>(`/commandes/${id}/status`, {
-    statut: newStatus
-  });
+  updateStatus: async (
+    id: number,
+    newStatus: string
+  ): Promise<CommandeResponse["data"]> => {
+    const response = await api.patch<CommandeResponse>(
+      `/commandes/${id}/status`,
+      {
+        statut: newStatus,
+      }
+    );
 
-  if (!response.data.data) {
-    throw new Error(`Erreur lors de la mise à jour du statut de la commande vers "${newStatus}"`);
-  }
-  return response.data.data;
-},
+    if (!response.data.data) {
+      throw new Error(
+        `Erreur lors de la mise à jour du statut de la commande vers "${newStatus}"`
+      );
+    }
+    return response.data.data;
+  },
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/commandes/${id}`);
@@ -230,30 +260,33 @@ updateStatus: async (id: number, newStatus: string): Promise<CommandeResponse['d
 
   getStatusLabel: (status: string): string => {
     const statusMap: Record<string, string> = {
-      'reçue': 'Reçue',
-      'payée': 'Payée',
-      'en_impression': 'En impression',
-      'terminée': 'Terminée',
-      'livrée': 'Livrée'
+      reçue: "Reçue",
+      payée: "Payée",
+      en_impression: "En impression",
+      terminée: "Terminée",
+      livrée: "Livrée",
     };
     return statusMap[status] || status;
   },
 
   isCompleted: (commande: Commande): boolean => {
-    return commande.statut === 'terminée' || commande.statut === 'livrée';
+    return commande.statut === "terminée" || commande.statut === "livrée";
   },
 
   // Ajouter une fonction utilitaire pour calculer le total avec remise
-  calculateTotalWithDiscount: (details: DetailCommande[], remise?: Remise): number => {
+  calculateTotalWithDiscount: (
+    details: DetailCommande[],
+    remise?: Remise
+  ): number => {
     const total = details.reduce((sum, detail) => sum + detail.sous_total, 0);
-    
+
     if (!remise || !remises.isValid(remise)) {
       return total;
     }
 
     const discountAmount = remises.calculateDiscount(total, remise);
     return Math.max(0, total - discountAmount);
-  }
+  },
 };
 
 export default commandes;

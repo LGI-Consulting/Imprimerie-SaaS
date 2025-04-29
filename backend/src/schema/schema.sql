@@ -45,7 +45,6 @@ CREATE TABLE stocks_materiaux_largeur (
     largeur DECIMAL(10, 2) NOT NULL,
     longeur_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
     seuil_alerte DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    unite_mesure VARCHAR(20) NOT NULL,
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (materiau_id, largeur)
@@ -61,13 +60,13 @@ CREATE TABLE commandes (
     situation_paiement VARCHAR(20) NOT NULL CHECK (situation_paiement IN ('credit', 'comptant')),
     priorite INTEGER DEFAULT 0,
     commentaires TEXT,
-    employe_reception_id INTEGER REFERENCES employes(employe_id),
-    employe_caisse_id INTEGER REFERENCES employes(employe_id),
-    employe_graphiste_id INTEGER REFERENCES employes(employe_id),
+    employe_reception_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
+    employe_caisse_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
+    employe_graphiste_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
     est_commande_speciale BOOLEAN DEFAULT FALSE
 );
 
--- Table Fichiers d'impression liés aux commandes
+-- Table Fichiers d'impression
 CREATE TABLE print_files (
     print_file_id SERIAL PRIMARY KEY,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
@@ -76,12 +75,12 @@ CREATE TABLE print_files (
     file_size BIGINT,
     mime_type VARCHAR(100),
     description TEXT,
-    uploaded_by INTEGER REFERENCES employes(employe_id),
+    uploaded_by INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
     date_upload TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (commande_id, file_name)
 );
 
--- Table Détails de Commande
+-- Table Détails de commande
 CREATE TABLE details_commande (
     detail_id SERIAL PRIMARY KEY,
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
@@ -104,23 +103,22 @@ CREATE TABLE paiements (
     reference_transaction VARCHAR(100),
     date_paiement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     statut VARCHAR(20) NOT NULL CHECK (statut IN ('en_attente', 'validé', 'échoué')),
-    employe_id INTEGER REFERENCES employes(employe_id)
+    employe_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL
 );
 
--- Table Factures (correction)
+-- Table Factures
 CREATE TABLE factures (
     facture_id SERIAL PRIMARY KEY,
     paiement_id INTEGER NOT NULL REFERENCES paiements(paiement_id) ON DELETE CASCADE,
-    numero_facture VARCHAR(50) NOT NULL,
+    numero_facture VARCHAR(50) NOT NULL UNIQUE,
     date_emission TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     montant_total DECIMAL(10, 2) NOT NULL,
     montant_taxe DECIMAL(10, 2) NOT NULL DEFAULT 0,
     remise DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    montant_final DECIMAL(10, 2) NOT NULL,
-    UNIQUE (numero_facture)
+    montant_final DECIMAL(10, 2) NOT NULL
 );
 
--- Table Mouvements de Stock
+-- Table Mouvements de stock
 CREATE TABLE mouvements_stock (
     mouvement_id SERIAL PRIMARY KEY,
     stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),
@@ -156,19 +154,19 @@ CREATE TABLE sessions_utilisateurs (
     appareil VARCHAR(255)
 );
 
--- Table Journal des Activités (améliorée)
+-- Journal des activités
 CREATE TABLE journal_activites (
     log_id SERIAL PRIMARY KEY,
     employe_id INTEGER REFERENCES employes(employe_id),
     action VARCHAR(100) NOT NULL,
     date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    details JSONB, -- Utiliser JSONB pour stocker des détails structurés
+    details JSONB,
     entite_affectee VARCHAR(50),
     entite_id INTEGER,
-    transaction_id INTEGER -- Pour lier à une transaction financière si applicable
+    transaction_id INTEGER
 );
 
--- Table Transactions Financières Clients
+-- Transactions financières clients
 CREATE TABLE transactions_clients (
     transaction_id SERIAL PRIMARY KEY,
     client_id INTEGER NOT NULL REFERENCES clients(client_id),
