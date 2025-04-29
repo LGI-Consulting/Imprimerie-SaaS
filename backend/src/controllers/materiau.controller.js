@@ -3,14 +3,31 @@ import pool from "../config/db.js";
 // Mouvement de stock (ajout/retrait)
 export const moveStock = async (req, res) => {
   const { materiauId, stockId } = req.params;
-  const { quantite } = req.body;
+  const { longueur, employeId } = req.body;
   try {
     const update = await pool.query(
       `UPDATE stocks_materiaux_largeur 
-       SET quantite_en_stock = quantite_en_stock + $1 
+       SET longueur_en_stock = longueur_en_stock + $1 
        WHERE stock_id = $2 AND materiau_id = $3 
        RETURNING *`,
-      [quantite, stockId, materiauId]
+      [longueur, stockId, materiauId]
+    );
+
+    // Journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mouvement_stock', $2, 'stocks_materiaux_largeur', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          stock_id: stockId,
+          materiau_id: materiauId,
+          longueur_en_stock: update.rows[0].longueur_en_stock,
+        }),
+        stockId,
+        null,
+      ]
     );
     res.status(200).json({ success: true, data: update.rows[0] });
   } catch (err) {
@@ -21,12 +38,30 @@ export const moveStock = async (req, res) => {
 // Ajout d'une nouvelle largeur
 export const addStock = async (req, res) => {
   const { materiauId } = req.params;
-  const { largeur, seuil_alerte, quantite_en_stock, unite_mesure } = req.body;
+  const { largeur, seuil_alerte, longueur_en_stock, unite_mesure, employeId } =
+    req.body;
   try {
     const insert = await pool.query(
-      `INSERT INTO stocks_materiaux_largeur (materiau_id, largeur, seuil_alerte, quantite_en_stock, unite_mesure)
+      `INSERT INTO stocks_materiaux_largeur (materiau_id, largeur, seuil_alerte, longueur_en_stock, unite_mesure)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [materiauId, largeur, seuil_alerte, quantite_en_stock, unite_mesure]
+      [materiauId, largeur, seuil_alerte, longueur_en_stock, unite_mesure]
+    );
+
+    // Journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mouvement_stock', $2, 'stocks_materiaux_largeur', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          stock_id: insert.rows[0].stock_id,
+          materiau_id: materiauId,
+          longueur_en_stock: insert.rows[0].longueur_en_stock,
+        }),
+        insert.rows[0].stock_id,
+        null,
+      ]
     );
     res.status(201).json({ success: true, data: insert.rows[0] });
   } catch (err) {
@@ -37,7 +72,7 @@ export const addStock = async (req, res) => {
 // Mise à jour du seuil d’alerte (ou quantité)
 export const updateStock = async (req, res) => {
   const { materiauId, stockId } = req.params;
-  const { seuil_alerte, quantite_en_stock } = req.body;
+  const { seuil_alerte, longueur_en_stock, employeId } = req.body;
   try {
     let query = "UPDATE stocks_materiaux_largeur SET ";
     const params = [];
@@ -46,15 +81,31 @@ export const updateStock = async (req, res) => {
       query += `seuil_alerte = $${idx++}`;
       params.push(seuil_alerte);
     }
-    if (quantite_en_stock !== undefined) {
+    if (longueur_en_stock !== undefined) {
       if (params.length) query += ", ";
-      query += `quantite_en_stock = $${idx++}`;
-      params.push(quantite_en_stock);
+      query += `longueur_en_stock = $${idx++}`;
+      params.push(longueur_en_stock);
     }
     query += ` WHERE stock_id = $${idx++} AND materiau_id = $${idx} RETURNING *`;
     params.push(stockId, materiauId);
 
     const update = await pool.query(query, params);
+    // Journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mouvement_stock', $2, 'stocks_materiaux_largeur', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          stock_id: stockId,
+          materiau_id: materiauId,
+          longueur_en_stock: update.rows[0].longueur_en_stock,
+        }),
+        stockId,
+        null,
+      ]
+    );
     res.status(200).json({ success: true, data: update.rows[0] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -71,7 +122,7 @@ export const getAllMateriau = async (req, res) => {
         COALESCE(json_agg(json_build_object(
           'stock_id', s.stock_id,
           'largeur', s.largeur,
-          'quantite_en_stock', s.quantite_en_stock,
+          'longueur_en_stock', s.longueur_en_stock,
           'unite_mesure', s.unite_mesure,
           'seuil_alerte', s.seuil_alerte
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
@@ -119,7 +170,7 @@ export const getMateriauBySearch = async (req, res) => {
         COALESCE(json_agg(json_build_object(
           'stock_id', s.stock_id,
           'largeur', s.largeur,
-          'quantite_en_stock', s.quantite_en_stock,
+          'longueur_en_stock', s.longueur_en_stock,
           'unite_mesure', s.unite_mesure,
           'seuil_alerte', s.seuil_alerte
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
@@ -161,7 +212,7 @@ export const getMateriauByID = async (req, res) => {
         COALESCE(json_agg(json_build_object(
           'stock_id', s.stock_id,
           'largeur', s.largeur,
-          'quantite_en_stock', s.quantite_en_stock,
+          'longueur_en_stock', s.longueur_en_stock,
           'unite_mesure', s.unite_mesure,
           'seuil_alerte', s.seuil_alerte
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
@@ -204,14 +255,14 @@ export const getMateriauStock = async (req, res) => {
         json_agg(json_build_object(
           'stock_id', s.stock_id,
           'largeur', s.largeur,
-          'quantite_en_stock', s.quantite_en_stock,
+          'longueur_en_stock', s.longueur_en_stock,
           'unite_mesure', s.unite_mesure,
           'seuil_alerte', s.seuil_alerte,
-          'est_bas', (s.quantite_en_stock <= s.seuil_alerte)
+          'est_bas', (s.longueur_en_stock <= s.seuil_alerte)
         )) as stocks
       FROM materiaux m
       JOIN stocks_materiaux_largeur s ON m.materiau_id = s.materiau_id
-      WHERE s.quantite_en_stock <= s.seuil_alerte
+      WHERE s.longueur_en_stock <= s.seuil_alerte
       GROUP BY m.materiau_id
       ORDER BY m.type_materiau, m.nom
     `;
@@ -296,7 +347,7 @@ export const createMateriau = async (req, res) => {
         INSERT INTO stocks_materiaux_largeur (
           materiau_id, 
           largeur, 
-          quantite_en_stock, 
+          longueur_en_stock, 
           seuil_alerte, 
           unite_mesure
         )
@@ -308,7 +359,7 @@ export const createMateriau = async (req, res) => {
         const stockValues = [
           materiau.materiau_id,
           stock.largeur,
-          stock.quantite_en_stock || 0,
+          stock.longueur_en_stock || 0,
           stock.seuil_alerte || 0,
           stock.unite_mesure || unite_mesure,
         ];
@@ -317,6 +368,21 @@ export const createMateriau = async (req, res) => {
         stocksData.push(stockResult.rows[0]);
       }
     }
+
+    //journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mouvement_stock', $2, 'materiaux', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          materiau_id: materiau.materiau_id,
+        }),
+        materiau.materiau_id,
+        null,
+      ]
+    );
 
     await client.query("COMMIT");
 
@@ -415,7 +481,7 @@ export const updateMateriau = async (req, res) => {
             UPDATE stocks_materiaux_largeur
             SET
               largeur = COALESCE($1, largeur),
-              quantite_en_stock = COALESCE($2, quantite_en_stock),
+              longueur_en_stock = COALESCE($2, longueur_en_stock),
               seuil_alerte = COALESCE($3, seuil_alerte),
               unite_mesure = COALESCE($4, unite_mesure),
               date_modification = CURRENT_TIMESTAMP
@@ -425,7 +491,7 @@ export const updateMateriau = async (req, res) => {
 
           await client.query(updateStockQuery, [
             stock.largeur,
-            stock.quantite_en_stock,
+            stock.longueur_en_stock,
             stock.seuil_alerte,
             stock.unite_mesure,
             stock.stock_id,
@@ -437,7 +503,7 @@ export const updateMateriau = async (req, res) => {
             INSERT INTO stocks_materiaux_largeur (
               materiau_id,
               largeur,
-              quantite_en_stock,
+              longueur_en_stock,
               seuil_alerte,
               unite_mesure
             )
@@ -448,7 +514,7 @@ export const updateMateriau = async (req, res) => {
           await client.query(insertStockQuery, [
             id,
             stock.largeur,
-            stock.quantite_en_stock || 0,
+            stock.longueur_en_stock || 0,
             stock.seuil_alerte || 0,
             stock.unite_mesure || materiauResult.rows[0].unite_mesure,
           ]);
@@ -462,7 +528,7 @@ export const updateMateriau = async (req, res) => {
         COALESCE(json_agg(json_build_object(
           'stock_id', s.stock_id,
           'largeur', s.largeur,
-          'quantite_en_stock', s.quantite_en_stock,
+          'longueur_en_stock', s.longueur_en_stock,
           'unite_mesure', s.unite_mesure,
           'seuil_alerte', s.seuil_alerte
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
@@ -473,6 +539,21 @@ export const updateMateriau = async (req, res) => {
     `;
 
     const updatedResult = await client.query(getUpdatedQuery, [id]);
+
+    //journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mise_a_jour', $2, 'materiaux', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          materiau_id: id,
+        }),
+        id,
+        null,
+      ]
+    );
 
     await client.query("COMMIT");
 
@@ -539,6 +620,21 @@ export const deleteMateriau = async (req, res) => {
       RETURNING *
     `;
 
+    //journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'suppression_materiau', $2, 'materiaux', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          materiau_id: id,
+        }),
+        id,
+        null,
+      ]
+    );
+
     const result = await pool.query(deleteQuery, [id]);
 
     res.status(200).json({
@@ -603,17 +699,17 @@ export const createMouvementStock = async (req, res) => {
     const {
       stock_id,
       type_mouvement,
-      quantite,
+      longueur,
       commentaire,
       commande_id,
       employe_id,
     } = req.body;
 
     // Validation des données
-    if (!stock_id || !type_mouvement || !quantite) {
+    if (!stock_id || !type_mouvement || !longueur) {
       return res.status(400).json({
         success: false,
-        message: "Le stock ID, le type de mouvement et la quantité sont requis",
+        message: "Le stock ID, le type de mouvement et la longueur sont requis",
       });
     }
 
@@ -635,7 +731,7 @@ export const createMouvementStock = async (req, res) => {
     const stock = stockResult.rows[0];
 
     // Vérifier si le stock est suffisant pour une sortie
-    if (type_mouvement === "sortie" && stock.quantite_en_stock < quantite) {
+    if (type_mouvement === "sortie" && stock.longueur_en_stock < longueur) {
       return res.status(400).json({
         success: false,
         message: "Stock insuffisant pour cette sortie",
@@ -649,7 +745,7 @@ export const createMouvementStock = async (req, res) => {
       INSERT INTO mouvements_stock (
         stock_id,
         type_mouvement,
-        quantite,
+        longueur,
         commentaire,
         commande_id,
         employe_id
@@ -661,7 +757,7 @@ export const createMouvementStock = async (req, res) => {
     const mouvementValues = [
       stock_id,
       type_mouvement,
-      quantite,
+      longueur,
       commentaire || null,
       commande_id || null,
       employe_id || req.user.employe_id,
@@ -677,10 +773,10 @@ export const createMouvementStock = async (req, res) => {
     const updateStockQuery = `
       UPDATE stocks_materiaux_largeur
       SET 
-        quantite_en_stock = CASE 
-          WHEN $2 = 'entrée' THEN quantite_en_stock + $3
-          WHEN $2 = 'sortie' THEN quantite_en_stock - $3
-          ELSE quantite_en_stock
+        longueur_en_stock = CASE 
+          WHEN $2 = 'entrée' THEN longueur_en_stock + $3
+          WHEN $2 = 'sortie' THEN longueur_en_stock - $3
+          ELSE longueur_en_stock
         END,
         date_modification = CURRENT_TIMESTAMP
       WHERE stock_id = $1
@@ -690,7 +786,7 @@ export const createMouvementStock = async (req, res) => {
     const updateStockResult = await client.query(updateStockQuery, [
       stock_id,
       type_mouvement,
-      quantite,
+      longueur,
     ]);
 
     await client.query("COMMIT");

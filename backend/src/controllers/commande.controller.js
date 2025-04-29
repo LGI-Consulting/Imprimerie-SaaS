@@ -444,6 +444,23 @@ export const createOrder = async (req, res) => {
       }
     }
 
+    // Enregistrer dans le journal des activités
+    const logQuery = `
+      INSERT INTO journal_activites 
+      (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+      VALUES ($1, 'creation_commande', $2, 'commandes', $3, $4)
+    `;
+    const detailsJson = JSON.stringify({
+      numero_commande: commandeId,
+      client_id: clientId,
+      statut: orderRes.rows[0].statut,
+      situation_paiement: orderRes.rows[0].situation_paiement,
+      est_commande_speciale: orderRes.rows[0].est_commande_speciale,
+      commentaires: options?.comments,
+      priorite: options?.priorite,
+    });
+    await client.query(logQuery, [employeId, detailsJson, commandeId, null]);
+
     await client.query("COMMIT");
 
     res.status(201).json({
@@ -647,40 +664,6 @@ export const deleteOrder = async (req, res) => {
         message:
           "Seules les commandes 'reçue' ou 'annulée' peuvent être supprimées",
       });
-    }
-
-    // 3. Restocker les matériaux si la commande n'est pas déjà annulée
-    if (currentOrder.statut !== "annulée") {
-      const details = await client.query(
-        `SELECT dc.materiau_id, dc.quantite, sml.stock_id
-         FROM details_commande dc
-         JOIN stocks_materiaux_largeur sml ON dc.materiau_id = sml.materiau_id
-         WHERE dc.commande_id = $1`,
-        [orderId]
-      );
-
-      for (const detail of details.rows) {
-        await client.query(
-          `UPDATE stocks_materiaux_largeur
-           SET longeur_en_stock = longeur_en_stock + $1
-           WHERE stock_id = $2`,
-          [detail.quantite, detail.stock_id]
-        );
-
-        await client.query(
-          `INSERT INTO mouvements_stock
-           (stock_id, type_mouvement, quantite, commande_id, employe_id, commentaire)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            detail.stock_id,
-            "annulation",
-            detail.quantite,
-            orderId,
-            employeId,
-            `Suppression commande ${currentOrder.numero_commande}`,
-          ]
-        );
-      }
     }
 
     // 4. Supprimer les fichiers associés

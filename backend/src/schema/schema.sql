@@ -123,7 +123,7 @@ CREATE TABLE mouvements_stock (
     mouvement_id SERIAL PRIMARY KEY,
     stock_id INTEGER REFERENCES stocks_materiaux_largeur(stock_id),
     type_mouvement VARCHAR(20) NOT NULL CHECK (type_mouvement IN ('entrée', 'sortie', 'ajustement')),
-    quantite DECIMAL(10, 2) NOT NULL,
+    longueur DECIMAL(10, 2) NOT NULL,
     date_mouvement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     commande_id INTEGER REFERENCES commandes(commande_id),
     employe_id INTEGER REFERENCES employes(employe_id),
