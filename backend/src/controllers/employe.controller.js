@@ -1,14 +1,18 @@
 import pool from "../config/db.js";
-import bcrypt from 'bcrypt';
+import bcrypt from "bcrypt";
 
 // Récupérer tous les employés
 export const getAllEmployes = async (req, res) => {
   try {
-    const query = 'SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes';
+    const query =
+      "SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes";
     const { rows } = await pool.query(query);
     res.status(200).json(rows);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des employés", error: error.message });
+    res.status(500).json({
+      message: "Erreur lors de la récupération des employés",
+      error: error.message,
+    });
   }
 };
 
@@ -16,16 +20,20 @@ export const getAllEmployes = async (req, res) => {
 export const getEmployeById = async (req, res) => {
   try {
     const employeId = req.params.id;
-    const query = 'SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes WHERE employe_id = $1';
+    const query =
+      "SELECT employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif FROM employes WHERE employe_id = $1";
     const { rows } = await pool.query(query, [employeId]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ message: "Employé non trouvé" });
     }
-    
+
     res.status(200).json(rows[0]);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération de l'employé", error: error.message });
+    res.status(500).json({
+      message: "Erreur lors de la récupération de l'employé",
+      error: error.message,
+    });
   }
 };
 
@@ -38,11 +46,14 @@ export const getEmployeBySearch = async (req, res) => {
       FROM employes 
       WHERE nom ILIKE $1 OR prenom ILIKE $1 OR telephone ILIKE $1 OR email ILIKE $1
     `;
-    
+
     const { rows } = await pool.query(sqlQuery, [`%${query}%`]);
     res.status(200).json(rows);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la recherche d'employés", error: error.message });
+    res.status(500).json({
+      message: "Erreur lors de la recherche d'employés",
+      error: error.message,
+    });
   }
 };
 
@@ -50,14 +61,17 @@ export const getEmployeBySearch = async (req, res) => {
 export const createEmploye = async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const { nom, prenom, email, telephone, role, password, date_embauche } = req.body;
+    await client.query("BEGIN");
+    const { nom, prenom, email, telephone, role, password, date_embauche } =
+      req.body;
 
-    const checkQuery = 'SELECT * FROM employes WHERE email = $1';
+    const checkQuery = "SELECT * FROM employes WHERE email = $1";
     const { rows } = await client.query(checkQuery, [email]);
     if (rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: "Un employé avec cet email existe déjà" });
+      await client.query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ message: "Un employé avec cet email existe déjà" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -67,14 +81,45 @@ export const createEmploye = async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
       RETURNING employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif
     `;
-    const values = [nom, prenom, email, telephone, role, hashedPassword, date_embauche];
+    const values = [
+      nom,
+      prenom,
+      email,
+      telephone,
+      role,
+      hashedPassword,
+      date_embauche,
+    ];
     const result = await client.query(insertQuery, values);
 
-    await client.query('COMMIT');
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'ajout_employe', $2, 'employes', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          nom: nom,
+          prenom: prenom,
+          email: email,
+          telephone: telephone,
+          role: role,
+          date_embauche: date_embauche,
+        }),
+        employeId,
+        null,
+      ]
+    );
+
+    await client.query("COMMIT");
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ message: "Erreur lors de la création de l'employé", error: error.message });
+    await client.query("ROLLBACK");
+    res.status(500).json({
+      message: "Erreur lors de la création de l'employé",
+      error: error.message,
+    });
   } finally {
     client.release();
   }
@@ -84,23 +129,29 @@ export const createEmploye = async (req, res) => {
 export const updateEmploye = async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
     const employeId = req.params.id;
     const { nom, prenom, email, telephone, role, date_embauche } = req.body;
 
-    const checkQuery = 'SELECT * FROM employes WHERE employe_id = $1';
+    const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
     if (checkResult.rows.length === 0) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Employé non trouvé" });
     }
 
     if (email !== checkResult.rows[0].email) {
-      const emailCheckQuery = 'SELECT * FROM employes WHERE email = $1 AND employe_id != $2';
-      const emailCheck = await client.query(emailCheckQuery, [email, employeId]);
+      const emailCheckQuery =
+        "SELECT * FROM employes WHERE email = $1 AND employe_id != $2";
+      const emailCheck = await client.query(emailCheckQuery, [
+        email,
+        employeId,
+      ]);
       if (emailCheck.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: "Cet email est déjà utilisé par un autre employé" });
+        await client.query("ROLLBACK");
+        return res
+          .status(400)
+          .json({ message: "Cet email est déjà utilisé par un autre employé" });
       }
     }
 
@@ -110,14 +161,45 @@ export const updateEmploye = async (req, res) => {
       WHERE employe_id = $7
       RETURNING employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif
     `;
-    const values = [nom, prenom, email, telephone, role, date_embauche, employeId];
+    const values = [
+      nom,
+      prenom,
+      email,
+      telephone,
+      role,
+      date_embauche,
+      employeId,
+    ];
     const result = await client.query(updateQuery, values);
 
-    await client.query('COMMIT');
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mise_a_jour_employe', $2, 'employes', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          nom: nom,
+          prenom: prenom,
+          email: email,
+          telephone: telephone,
+          role: role,
+          date_embauche: date_embauche,
+        }),
+        employeId,
+        null,
+      ]
+    );
+
+    await client.query("COMMIT");
     res.status(200).json(result.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ message: "Erreur lors de la mise à jour de l'employé", error: error.message });
+    await client.query("ROLLBACK");
+    res.status(500).json({
+      message: "Erreur lors de la mise à jour de l'employé",
+      error: error.message,
+    });
   } finally {
     client.release();
   }
@@ -127,14 +209,14 @@ export const updateEmploye = async (req, res) => {
 export const changeEmployeStatus = async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
     const employeId = req.params.id;
     const { est_actif } = req.body;
 
-    const checkQuery = 'SELECT * FROM employes WHERE employe_id = $1';
+    const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
     if (checkResult.rows.length === 0) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Employé non trouvé" });
     }
 
@@ -145,11 +227,28 @@ export const changeEmployeStatus = async (req, res) => {
       RETURNING employe_id, nom, prenom, email, telephone, role, date_embauche, est_actif
     `;
     const result = await client.query(updateQuery, [est_actif, employeId]);
-    await client.query('COMMIT');
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'changement_statut_employe', $2, 'employes', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          est_actif: est_actif,
+        }),
+        employeId,
+        null,
+      ]
+    );
+    await client.query("COMMIT");
     res.status(200).json(result.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ message: "Erreur lors du changement de statut de l'employé", error: error.message });
+    await client.query("ROLLBACK");
+    res.status(500).json({
+      message: "Erreur lors du changement de statut de l'employé",
+      error: error.message,
+    });
   } finally {
     client.release();
   }
@@ -159,23 +258,41 @@ export const changeEmployeStatus = async (req, res) => {
 export const deleteEmploye = async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
     const employeId = req.params.id;
 
-    const checkQuery = 'SELECT * FROM employes WHERE employe_id = $1';
+    const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
     if (checkResult.rows.length === 0) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Employé non trouvé" });
     }
 
-    const deleteQuery = 'DELETE FROM employes WHERE employe_id = $1';
+    const deleteQuery = "DELETE FROM employes WHERE employe_id = $1";
     await client.query(deleteQuery, [employeId]);
-    await client.query('COMMIT');
+
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'suppression_employe', $2, 'employes', $3, $4)`,
+      [
+        employeId,
+        JSON.stringify({
+          employe_id: employeId,
+        }),
+        employeId,
+        null,
+      ]
+    );
+    await client.query("COMMIT");
     res.status(200).json({ message: "Employé supprimé avec succès" });
   } catch (error) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ message: "Erreur lors de la suppression de l'employé", error: error.message });
+    await client.query("ROLLBACK");
+    res.status(500).json({
+      message: "Erreur lors de la suppression de l'employé",
+      error: error.message,
+    });
   } finally {
     client.release();
   }
@@ -186,7 +303,7 @@ export const getEmployeActivities = async (req, res) => {
   try {
     const employeId = req.params.id;
 
-    const checkQuery = 'SELECT * FROM employes WHERE employe_id = $1';
+    const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await pool.query(checkQuery, [employeId]);
     if (checkResult.rows.length === 0) {
       return res.status(404).json({ message: "Employé non trouvé" });
@@ -201,6 +318,9 @@ export const getEmployeActivities = async (req, res) => {
     const { rows } = await pool.query(activitiesQuery, [employeId]);
     res.status(200).json(rows);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des activités de l'employé", error: error.message });
+    res.status(500).json({
+      message: "Erreur lors de la récupération des activités de l'employé",
+      error: error.message,
+    });
   }
 };

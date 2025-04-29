@@ -6,13 +6,16 @@ import pool from "../config/db.js";
 export const createPayment = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { montant, commande_id, methode, reference_transaction, employe_id } = req.body;
+    const { montant, commande_id, methode, reference_transaction, employe_id } =
+      req.body;
 
     if (!montant || !commande_id || !methode) {
-      return res.status(400).json({ error: 'Montant, commande ID, et méthode de paiement sont requis' });
+      return res.status(400).json({
+        error: "Montant, commande ID, et méthode de paiement sont requis",
+      });
     }
 
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Créer le paiement
     const paymentQuery = `
@@ -20,25 +23,35 @@ export const createPayment = async (req, res) => {
       VALUES ($1, $2, $3, $4, NOW(), 'validé', $5)
       RETURNING *
     `;
-    const paymentResult = await client.query(paymentQuery, [commande_id, montant, methode, reference_transaction, employe_id]);
+    const paymentResult = await client.query(paymentQuery, [
+      commande_id,
+      montant,
+      methode,
+      reference_transaction,
+      employe_id,
+    ]);
     const payment = paymentResult.rows[0];
 
     // Mettre à jour le statut de la commande
     await client.query(
-      'UPDATE commandes SET statut = $1, employe_caisse_id = $2 WHERE commande_id = $3',
-      ['payée', employe_id, commande_id]
+      "UPDATE commandes SET statut = $1, employe_caisse_id = $2 WHERE commande_id = $3",
+      ["payée", employe_id, commande_id]
     );
 
     // Récupérer les détails de la commande pour calculer le montant total
     const detailsResult = await client.query(
-      'SELECT SUM(sous_total) as total FROM details_commande WHERE commande_id = $1',
+      "SELECT SUM(sous_total) as total FROM details_commande WHERE commande_id = $1",
       [commande_id]
     );
     const montantTotal = detailsResult.rows[0].total || montant;
 
     // Générer un numéro de facture unique (année + mois + id)
     const currentDate = new Date();
-    const numeroFacture = `FAC-${currentDate.getFullYear()}${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${payment.paiement_id}`;
+    const numeroFacture = `FAC-${currentDate.getFullYear()}${(
+      currentDate.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, "0")}-${payment.paiement_id}`;
 
     // Créer la facture
     const factureQuery = `
@@ -46,25 +59,46 @@ export const createPayment = async (req, res) => {
       VALUES ($1, $2, NOW(), $3, 0, 0, $3, NOW())
       RETURNING *
     `;
-    const factureResult = await client.query(factureQuery, [commande_id, numeroFacture, montantTotal]);
+    const factureResult = await client.query(factureQuery, [
+      commande_id,
+      numeroFacture,
+      montantTotal,
+    ]);
     const facture = factureResult.rows[0];
 
-    await client.query('COMMIT');
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'ajout_facture', $2, 'factures', $3, $4)`,
+      [
+        employe_id,
+        JSON.stringify({
+          numero_facture: numeroFacture,
+          montant_total: montantTotal,
+          montant_final: montantTotal,
+        }),
+        commande_id,
+        null,
+      ]
+    );
+
+    await client.query("COMMIT");
 
     res.status(201).json({
       success: true,
       data: {
         payment,
-        facture
+        facture,
       },
-      message: 'Paiement traité et facture générée avec succès'
+      message: "Paiement traité et facture générée avec succès",
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Erreur lors de la création du paiement:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec du traitement du paiement' 
+    await client.query("ROLLBACK");
+    console.error("Erreur lors de la création du paiement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec du traitement du paiement",
     });
   } finally {
     client.release();
@@ -82,16 +116,16 @@ export const getAllPayments = async (req, res) => {
       JOIN commandes c ON p.commande_id = c.commande_id
       ORDER BY p.date_paiement DESC
     `);
-    
+
     res.status(200).json({
       success: true,
-      data: result.rows
+      data: result.rows,
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération des paiements:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la récupération des paiements' 
+    console.error("Erreur lors de la récupération des paiements:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la récupération des paiements",
     });
   }
 };
@@ -103,38 +137,44 @@ export const getPaymentById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const paymentResult = await pool.query(`
+    const paymentResult = await pool.query(
+      `
       SELECT p.*, c.numero_commande 
       FROM paiements p
       JOIN commandes c ON p.commande_id = c.commande_id
       WHERE p.paiement_id = $1
-    `, [id]);
-    
+    `,
+      [id]
+    );
+
     if (paymentResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Paiement non trouvé' 
+      return res.status(404).json({
+        success: false,
+        message: "Paiement non trouvé",
       });
     }
 
-    const factureResult = await pool.query(`
+    const factureResult = await pool.query(
+      `
       SELECT * FROM factures WHERE commande_id = $1
-    `, [paymentResult.rows[0].commande_id]);
-    
+    `,
+      [paymentResult.rows[0].commande_id]
+    );
+
     const facture = factureResult.rows[0] || null;
 
     res.status(200).json({
       success: true,
       data: {
         payment: paymentResult.rows[0],
-        facture
-      }
+        facture,
+      },
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération du paiement:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la récupération du paiement' 
+    console.error("Erreur lors de la récupération du paiement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la récupération du paiement",
     });
   }
 };
@@ -148,15 +188,18 @@ export const updatePayment = async (req, res) => {
     const { id } = req.params;
     const { montant, methode, reference_transaction, statut } = req.body;
 
-    const checkResult = await client.query('SELECT * FROM paiements WHERE paiement_id = $1', [id]);
+    const checkResult = await client.query(
+      "SELECT * FROM paiements WHERE paiement_id = $1",
+      [id]
+    );
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Paiement non trouvé' 
+      return res.status(404).json({
+        success: false,
+        message: "Paiement non trouvé",
       });
     }
 
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Mise à jour du paiement
     const updateQuery = `
@@ -169,45 +212,67 @@ export const updatePayment = async (req, res) => {
       RETURNING *
     `;
     const result = await client.query(updateQuery, [
-      montant, methode, reference_transaction, statut, id
+      montant,
+      methode,
+      reference_transaction,
+      statut,
+      id,
     ]);
 
     // Si le statut du paiement est mis à jour à "validé", mettre à jour le statut de la commande
-    if (statut === 'validé') {
+    if (statut === "validé") {
       await client.query(
-        'UPDATE commandes SET statut = $1 WHERE commande_id = $2',
-        ['payée', result.rows[0].commande_id]
+        "UPDATE commandes SET statut = $1 WHERE commande_id = $2",
+        ["payée", result.rows[0].commande_id]
       );
-    } else if (statut === 'échoué') {
+    } else if (statut === "échoué") {
       await client.query(
-        'UPDATE commandes SET statut = $1 WHERE commande_id = $2',
-        ['reçue', result.rows[0].commande_id]
+        "UPDATE commandes SET statut = $1 WHERE commande_id = $2",
+        ["reçue", result.rows[0].commande_id]
       );
     }
 
     // Si le montant est modifié, mettre à jour la facture
     if (montant) {
       await client.query(
-        'UPDATE factures SET montant_total = $1, montant_final = $1 WHERE commande_id = $2',
+        "UPDATE factures SET montant_total = $1, montant_final = $1 WHERE commande_id = $2",
         [montant, result.rows[0].commande_id]
       );
     }
 
-    await client.query('COMMIT');
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mise_a_jour_paiement', $2, 'paiements', $3, $4)`,
+      [
+        employe_id,
+        JSON.stringify({
+          montant: montant,
+          methode: methode,
+          reference_transaction: reference_transaction,
+          statut: statut,
+        }),
+        id,
+        null,
+      ]
+    );
+
+    await client.query("COMMIT");
 
     res.status(200).json({
       success: true,
       data: {
-        payment: result.rows[0]
+        payment: result.rows[0],
       },
-      message: 'Paiement mis à jour avec succès'
+      message: "Paiement mis à jour avec succès",
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Erreur lors de la mise à jour du paiement:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la mise à jour du paiement'
+    await client.query("ROLLBACK");
+    console.error("Erreur lors de la mise à jour du paiement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la mise à jour du paiement",
     });
   } finally {
     client.release();
@@ -222,42 +287,65 @@ export const deletePayment = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const checkResult = await client.query('SELECT * FROM paiements WHERE paiement_id = $1', [id]);
+    const checkResult = await client.query(
+      "SELECT * FROM paiements WHERE paiement_id = $1",
+      [id]
+    );
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Paiement non trouvé' 
+      return res.status(404).json({
+        success: false,
+        message: "Paiement non trouvé",
       });
     }
 
     const commande_id = checkResult.rows[0].commande_id;
 
-    await client.query('BEGIN');
-    
+    await client.query("BEGIN");
+
     // Supprimer la facture associée
-    await client.query('DELETE FROM factures WHERE commande_id = $1', [commande_id]);
-    
+    await client.query("DELETE FROM factures WHERE commande_id = $1", [
+      commande_id,
+    ]);
+
     // Supprimer le paiement
-    await client.query('DELETE FROM paiements WHERE paiement_id = $1', [id]);
-    
+    await client.query("DELETE FROM paiements WHERE paiement_id = $1", [id]);
+
     // Mettre à jour le statut de la commande
     await client.query(
-      'UPDATE commandes SET statut = $1 WHERE commande_id = $2',
-      ['reçue', commande_id]
+      "UPDATE commandes SET statut = $1 WHERE commande_id = $2",
+      ["reçue", commande_id]
     );
-    
-    await client.query('COMMIT');
 
-    res.status(200).json({ 
+    //journalisation
+    await client.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'suppression_paiement', $2, 'paiements', $3, $4)`,
+      [
+        employe_id,
+        JSON.stringify({
+          montant: montant,
+          methode: methode,
+          reference_transaction: reference_transaction,
+          statut: statut,
+        }),
+        id,
+        null,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
       success: true,
-      message: 'Paiement et facture associée supprimés avec succès' 
+      message: "Paiement et facture associée supprimés avec succès",
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Erreur lors de la suppression du paiement:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la suppression du paiement' 
+    await client.query("ROLLBACK");
+    console.error("Erreur lors de la suppression du paiement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la suppression du paiement",
     });
   } finally {
     client.release();
@@ -275,16 +363,16 @@ export const getAllFactures = async (req, res) => {
       JOIN commandes c ON f.commande_id = c.commande_id
       ORDER BY f.date_emission DESC
     `);
-    
+
     res.status(200).json({
       success: true,
-      data: result.rows
+      data: result.rows,
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération des factures:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la récupération des factures' 
+    console.error("Erreur lors de la récupération des factures:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la récupération des factures",
     });
   }
 };
@@ -296,39 +384,42 @@ export const getFactureById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const factureResult = await pool.query(`
+    const factureResult = await pool.query(
+      `
       SELECT f.*, c.numero_commande 
       FROM factures f
       JOIN commandes c ON f.commande_id = c.commande_id
       WHERE f.facture_id = $1
-    `, [id]);
-    
+    `,
+      [id]
+    );
+
     if (factureResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Facture non trouvée' 
+      return res.status(404).json({
+        success: false,
+        message: "Facture non trouvée",
       });
     }
 
     const paymentResult = await pool.query(
-      'SELECT * FROM paiements WHERE commande_id = $1',
+      "SELECT * FROM paiements WHERE commande_id = $1",
       [factureResult.rows[0].commande_id]
     );
-    
+
     const payment = paymentResult.rows[0] || null;
 
     res.status(200).json({
       success: true,
       data: {
         facture: factureResult.rows[0],
-        payment
-      }
+        payment,
+      },
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération de la facture:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la récupération de la facture' 
+    console.error("Erreur lors de la récupération de la facture:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la récupération de la facture",
     });
   }
 };
@@ -341,11 +432,14 @@ export const updateFacture = async (req, res) => {
     const { id } = req.params;
     const { montant_total, montant_taxe, remise, montant_final } = req.body;
 
-    const checkResult = await pool.query('SELECT * FROM factures WHERE facture_id = $1', [id]);
+    const checkResult = await pool.query(
+      "SELECT * FROM factures WHERE facture_id = $1",
+      [id]
+    );
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Facture non trouvée' 
+      return res.status(404).json({
+        success: false,
+        message: "Facture non trouvée",
       });
     }
 
@@ -360,18 +454,36 @@ export const updateFacture = async (req, res) => {
       [montant_total, montant_taxe, remise, montant_final, id]
     );
 
+    //journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'mise_a_jour_facture', $2, 'factures', $3, $4)`,
+      [
+        employe_id,
+        JSON.stringify({
+          montant_total: montant_total,
+          montant_taxe: montant_taxe,
+          remise: remise,
+          montant_final: montant_final,
+        }),
+        id,
+        null,
+      ]
+    );
+
     res.status(200).json({
       success: true,
       data: {
-        facture: result.rows[0]
+        facture: result.rows[0],
       },
-      message: 'Facture mise à jour avec succès'
+      message: "Facture mise à jour avec succès",
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la facture:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la mise à jour de la facture' 
+    console.error("Erreur lors de la mise à jour de la facture:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la mise à jour de la facture",
     });
   }
 };
@@ -383,36 +495,58 @@ export const deleteFacture = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const checkResult = await pool.query('SELECT * FROM factures WHERE facture_id = $1', [id]);
+    const checkResult = await pool.query(
+      "SELECT * FROM factures WHERE facture_id = $1",
+      [id]
+    );
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Facture non trouvée' 
+      return res.status(404).json({
+        success: false,
+        message: "Facture non trouvée",
       });
     }
 
     const commande_id = checkResult.rows[0].commande_id;
-    
+
     // Vérifier si un paiement est associé
-    const paymentCheck = await pool.query('SELECT * FROM paiements WHERE commande_id = $1', [commande_id]);
+    const paymentCheck = await pool.query(
+      "SELECT * FROM paiements WHERE commande_id = $1",
+      [commande_id]
+    );
     if (paymentCheck.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Impossible de supprimer une facture associée à un paiement. Supprimez d\'abord le paiement.'
+        message:
+          "Impossible de supprimer une facture associée à un paiement. Supprimez d'abord le paiement.",
       });
     }
 
-    await pool.query('DELETE FROM factures WHERE facture_id = $1', [id]);
-    
-    res.status(200).json({ 
+    await pool.query("DELETE FROM factures WHERE facture_id = $1", [id]);
+
+    //journalisation
+    await pool.query(
+      `INSERT INTO journal_activites 
+       (employe_id, action, details, entite_affectee, entite_id, transaction_id)
+       VALUES ($1, 'suppression_facture', $2, 'factures', $3, $4)`,
+      [
+        employe_id,
+        JSON.stringify({
+          facture_id: id,
+        }),
+        id,
+        null,
+      ]
+    );
+
+    res.status(200).json({
       success: true,
-      message: 'Facture supprimée avec succès' 
+      message: "Facture supprimée avec succès",
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression de la facture:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Échec de la suppression de la facture' 
+    console.error("Erreur lors de la suppression de la facture:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la suppression de la facture",
     });
   }
 };
