@@ -43,7 +43,15 @@ async function register(req, res) {
       [
         req.user.id,
         "création_compte",
-        `Création du compte pour ${nom} ${prenom}`,
+        JSON.stringify({
+          nom: nom,
+          prenom: prenom,
+          email: email,
+          telephone: telephone,
+          role: role,
+          password: password,
+          date_embauche: date_embauche,
+        }),
         "employes",
         result.rows[0].employe_id,
       ]
@@ -87,14 +95,14 @@ async function login(req, res) {
   try {
     const { email, password } = req.body;
 
-    const result = await pool.query(
-      "SELECT * FROM employes WHERE email = $1",
-      [email]
-    );
+    const result = await pool.query("SELECT * FROM employes WHERE email = $1", [
+      email,
+    ]);
     if (result.rows.length === 0)
-      return res
-        .status(401)
-        .json({ success: false, message: "Email ou mot de passworde incorrect" });
+      return res.status(401).json({
+        success: false,
+        message: "Email ou mot de passworde incorrect",
+      });
 
     const employee = result.rows[0];
     if (!employee.est_actif)
@@ -102,14 +110,12 @@ async function login(req, res) {
         .status(403)
         .json({ success: false, message: "Ce compte a été désactivé" });
 
-    const ispasswordValid = await bc.compare(
-      password,
-      employee.password
-    );
+    const ispasswordValid = await bc.compare(password, employee.password);
     if (!ispasswordValid)
-      return res
-        .status(401)
-        .json({ success: false, message: "Email ou mot de passworde incorrect" });
+      return res.status(401).json({
+        success: false,
+        message: "Email ou mot de passworde incorrect",
+      });
 
     const payload = {
       id: employee.employe_id,
@@ -143,7 +149,10 @@ async function login(req, res) {
       [
         employee.employe_id,
         "connexion",
-        `Connexion depuis ${ip}`,
+        JSON.stringify({
+          ip: ip,
+          userAgent: userAgent,
+        }),
         "employes",
         employee.employe_id,
       ]
@@ -227,7 +236,10 @@ async function logout(req, res) {
         [
           req.user.id,
           "déconnexion",
-          "Déconnexion employé",
+          JSON.stringify({
+            ip: ip,
+            userAgent: userAgent,
+          }),
           "employes",
           req.user.id,
         ]
@@ -332,7 +344,10 @@ async function changepassword(req, res) {
       [
         req.user.id,
         "modification_password",
-        "Modification du mot de passworde employé",
+        JSON.stringify({
+          ancien_password: ancien_password,
+          nouveau_password: hashedpassword,
+        }),
         "employes",
         req.user.id,
       ]
@@ -352,11 +367,4 @@ async function changepassword(req, res) {
   }
 }
 
-export {
-  register,
-  login,
-  logout,
-  getProfile,
-  changepassword,
-  refreshToken,
-};
+export { register, login, logout, getProfile, changepassword, refreshToken };

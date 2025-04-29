@@ -2,7 +2,7 @@ export const buildStockJson = () => `
   COALESCE(json_agg(json_build_object(
     'stock_id', s.stock_id,
     'largeur', s.largeur,
-    'longueur_en_stock', s.longueur_en_stock,
+    'longeur_en_stock', s.longeur_en_stock,
     'seuil_alerte', s.seuil_alerte
   )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
 `;

@@ -102,20 +102,18 @@ const insertMateriau = async (materiau) => {
             INSERT INTO stocks_materiaux_largeur (
                 materiau_id,
                 largeur,
-                quantite_en_stock,
-                seuil_alerte,
-                unite_mesure
+                longeur_en_stock,
+                seuil_alerte
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4)
         `;
 
     for (const largeur of materiau.largeurs) {
       await client.query(insertStockQuery, [
         newMateriau.materiau_id,
         largeur,
-        0, // quantité initiale à 0
-        10, // seuil d'alerte par défaut
-        materiau.unite_mesure,
+        100,
+        10,
       ]);
     }
 

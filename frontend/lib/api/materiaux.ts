@@ -1,6 +1,6 @@
 // lib/api/materiaux.ts
 import api from "./config";
-import type { Material, MaterialStock } from "./types";
+import type { Materiau, StockMateriauxLargeur } from "./types";
 
 // Types pour les requêtes
 export interface MaterialCreateData {
@@ -11,7 +11,7 @@ export interface MaterialCreateData {
   options_disponibles?: Record<string, any>;
   largeurs: {
     largeur: number;
-    quantite_en_stock: number;
+    longeur_en_stock: number;
     seuil_alerte: number;
   }[];
 }
@@ -21,7 +21,7 @@ export interface MaterialUpdateData
   largeurs?: {
     stock_id?: number;
     largeur: number;
-    quantite_en_stock: number;
+    longeur_en_stock: number;
     seuil_alerte: number;
   }[];
 }
@@ -29,28 +29,28 @@ export interface MaterialUpdateData
 export interface MaterialResponse {
   success: boolean;
   message?: string;
-  data?: Material;
+  data?: Materiau;
 }
 
 export interface MaterialListResponse {
   success: boolean;
   message?: string;
-  data: Material[];
+  data: Materiau[];
 }
 
 export interface StockMovementData {
   type_mouvement: "entrée" | "sortie" | "ajustement";
-  quantite: number;
+  longeur: number;
   commentaire?: string;
 }
 
 const materiaux = {
-  async getAll(): Promise<Material[]> {
+  async getAll(): Promise<Materiau[]> {
     const response = await api.get<MaterialListResponse>("/materiaux");
     return response.data.data;
   },
 
-  async getById(id: number): Promise<Material> {
+  async getById(id: number): Promise<Materiau> {
     const response = await api.get<MaterialResponse>(`/materiaux/${id}`);
     if (!response.data.data) {
       throw new Error("Matériau non trouvé");
@@ -58,7 +58,7 @@ const materiaux = {
     return response.data.data;
   },
 
-  async create(data: MaterialCreateData): Promise<Material> {
+  async create(data: MaterialCreateData): Promise<Materiau> {
     const response = await api.post<MaterialResponse>("/materiaux", data);
     if (!response.data.data) {
       throw new Error("Erreur lors de la création du matériau");
@@ -66,7 +66,7 @@ const materiaux = {
     return response.data.data;
   },
 
-  async update(id: number, data: MaterialUpdateData): Promise<Material> {
+  async update(id: number, data: MaterialUpdateData): Promise<Materiau> {
     const response = await api.put<MaterialResponse>(`/materiaux/${id}`, data);
     if (!response.data.data) {
       throw new Error("Erreur lors de la mise à jour du matériau");
@@ -78,7 +78,7 @@ const materiaux = {
     await api.delete(`/materiaux/${id}`);
   },
 
-  async search(query: string): Promise<Material[]> {
+  async search(query: string): Promise<Materiau[]> {
     const response = await api.get<MaterialListResponse>("/materiaux/search", {
       params: { q: query },
     });
@@ -92,9 +92,9 @@ const materiaux = {
     await api.post(`/stocks/${stockId}/mouvements`, data);
   },
 
-  async moveStock(materiauId: number, stockId: number, quantite: number) {
+  async moveStock(materiauId: number, stockId: number, longeur: number) {
     return api.patch(`/materiaux/${materiauId}/stocks/${stockId}/move`, {
-      quantite,
+      longeur,
     });
   },
 
@@ -103,8 +103,7 @@ const materiaux = {
     data: {
       largeur: number;
       seuil_alerte: number;
-      quantite_en_stock: number;
-      unite_mesure: string;
+      longeur_en_stock: number;
     }
   ) {
     return api.post(`/materiaux/${materiauId}/stocks`, data);
@@ -113,7 +112,7 @@ const materiaux = {
   async updateStock(
     materiauId: number,
     stockId: number,
-    data: { seuil_alerte?: number; quantite_en_stock?: number }
+    data: { seuil_alerte?: number; longeur_en_stock?: number }
   ) {
     return api.patch(`/materiaux/${materiauId}/stocks/${stockId}`, data);
   },
