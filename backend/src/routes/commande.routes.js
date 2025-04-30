@@ -12,10 +12,7 @@ import {
   getOrdersByMaterial,
 } from "../controllers/commande.controller.js";
 import { verifyToken, checkRole } from "../middlewares/auth.middleware.js";
-import {
-  uploadMiddleware,
-  handleMulterErrors,
-} from "../middlewares/upload.middleware.js";
+import upload, { parseMultipartForm, handleMulterErrors } from "../middlewares/upload.middleware.js";
 
 const router = express.Router();
 
@@ -40,7 +37,6 @@ router.get(
   checkRole(["accueil", "admin"]),
   getOrderBySituationPaiement
 );
-
 router.get(
   "/material/:materialType",
   checkRole(["accueil", "admin"]),
@@ -48,24 +44,26 @@ router.get(
 );
 router.get("/:id", checkRole(["accueil", "admin"]), getOrderById);
 
-// Routes avec gestion des uploads de fichiers
+// Création de commande avec gestion des fichiers
 router.post(
   "/",
   checkRole(["accueil", "admin"]),
-  uploadMiddleware.array("files", 5),
+  upload.array("files", 5),
+  parseMultipartForm,
+  handleMulterErrors,
   createOrder
 );
+
+// Mise à jour de commande avec gestion des fichiers
 router.put(
   "/:id",
   checkRole(["accueil", "admin"]),
-  uploadMiddleware.array("files", 5),
+  upload.array("files", 5),
+  parseMultipartForm,
+  handleMulterErrors,
   updateOrder
 );
 
-// Route de suppression (sans besoin de multer)
 router.delete("/:id", checkRole(["admin"]), deleteOrder);
-
-// Gestionnaire d'erreurs pour Multer
-router.use(handleMulterErrors);
 
 export default router;

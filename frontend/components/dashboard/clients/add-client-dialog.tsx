@@ -35,6 +35,12 @@ const formSchema = z.object({
   }),
   adresse: z.string().optional().transform(val => val || ""),
   notes: z.string().optional(),
+  dette_initiale: z.number().min(0, {
+    message: "La dette initiale ne peut pas être négative.",
+  }).optional().default(0),
+  depot_initial: z.number().min(0, {
+    message: "Le dépôt initial ne peut pas être négatif.",
+  }).optional().default(0),
 })
 
 interface AddClientDialogProps {
@@ -47,6 +53,8 @@ interface AddClientDialogProps {
     telephone: string
     adresse?: string | null
     notes?: string
+    dette?: number
+    depot?: number
   }) => void
 }
 
@@ -64,6 +72,8 @@ export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDi
       telephone: "",
       adresse: "",
       notes: "",
+      dette_initiale: 0,
+      depot_initial: 0,
     },
   })
 
@@ -79,6 +89,8 @@ export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDi
         telephone: values.telephone,
         adresse: values.adresse || null,
         notes: values.notes || undefined,
+        dette: values.dette_initiale,
+        depot: values.depot_initial,
       })
       onOpenChange(false)
       form.reset()
@@ -110,14 +122,15 @@ export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDi
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="informations">Informations principales</TabsTrigger>
             <TabsTrigger value="details">Détails supplémentaires</TabsTrigger>
+            <TabsTrigger value="finance">Finance</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="informations">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <TabsContent value="informations">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -190,28 +203,9 @@ export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDi
                     )}
                   />
                 </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Ajout en cours...
-                      </>
-                    ) : (
-                      "Ajouter le client"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
-          
-          <TabsContent value="details">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              </TabsContent>
+              
+              <TabsContent value="details">
                 <FormField
                   control={form.control}
                   name="notes"
@@ -232,25 +226,70 @@ export function AddClientDialog({ open, onOpenChange, onAddClient }: AddClientDi
                     </FormItem>
                   )}
                 />
-                <Separator />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Ajout en cours...
-                      </>
-                    ) : (
-                      "Ajouter le client"
+              </TabsContent>
+              
+              <TabsContent value="finance">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="dette_initiale"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dette initiale</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription>Montant de la dette initiale (optionnel)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
+                  />
+                  <FormField
+                    control={form.control}
+                    name="depot_initial"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dépôt initial</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription>Montant du dépôt initial (optionnel)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </TabsContent>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Ajout en cours...
+                    </>
+                  ) : (
+                    "Ajouter le client"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </Tabs>
       </DialogContent>
     </Dialog>

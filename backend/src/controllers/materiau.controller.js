@@ -122,7 +122,7 @@ export const getAllMateriau = async (req, res) => {
           'stock_id', s.stock_id,
           'largeur', s.largeur,
           'longeur_en_stock',s.longeur_en_stock,
-          'unite_mesure', s.unite_mesure,
+          'unite_mesure', m.unite_mesure,
           'seuil_alerte', s.seuil_alerte
         )) FILTER (WHERE s.stock_id IS NOT NULL), '[]') as stocks
       FROM materiaux m

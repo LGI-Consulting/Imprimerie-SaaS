@@ -54,14 +54,16 @@ export function ViewOrderDialog({
 }: ViewOrderDialogProps) {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "en_attente":
+      case "reçue":
         return "bg-yellow-500"
-      case "en_cours":
+      case "payée":
         return "bg-blue-500"
-      case "terminee":
+      case "en_impression":
+        return "bg-purple-500"
+      case "terminée":
         return "bg-green-500"
-      case "annulee":
-        return "bg-red-500"
+      case "livrée":
+        return "bg-green-600"
       default:
         return "bg-gray-500"
     }
@@ -96,6 +98,20 @@ export function ViewOrderDialog({
     return type === 'pourcentage' ? '%' : '€'
   }
 
+  const getOptionsDetails = (detail: DetailCommande) => {
+    try {
+      const options = JSON.parse(detail.commentaires || "{}")
+      return Object.entries(options).map(([key, value]: [string, any]) => ({
+        name: key,
+        quantity: value.quantity || 1,
+        unit_price: value.unit_price || 0,
+        total_price: value.total_price || 0
+      }))
+    } catch {
+      return []
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -122,6 +138,12 @@ export function ViewOrderDialog({
                   {order.statut}
                 </Badge>
               </p>
+              <p>
+                Mode de paiement:{" "}
+                <Badge variant="outline">
+                  {order.situation_paiement === "comptant" ? "Comptant" : "Crédit"}
+                </Badge>
+              </p>
             </div>
           </div>
 
@@ -138,8 +160,8 @@ export function ViewOrderDialog({
               <TableHeader>
                 <TableRow>
                   <TableHead>Matériau</TableHead>
-                  <TableHead>Quantité</TableHead>
                   <TableHead>Dimensions</TableHead>
+                  <TableHead>Quantité</TableHead>
                   <TableHead>Prix unitaire</TableHead>
                   <TableHead>Total</TableHead>
                 </TableRow>
@@ -148,8 +170,8 @@ export function ViewOrderDialog({
                 {order.details.map((item, index) => (
                   <TableRow key={index}>
                     <TableCell>{item.materiau_id}</TableCell>
-                    <TableCell>{item.quantite}</TableCell>
                     <TableCell>{item.dimensions}</TableCell>
+                    <TableCell>{item.quantite}</TableCell>
                     <TableCell>{formatCurrency(item.prix_unitaire)}</TableCell>
                     <TableCell>
                       {formatCurrency(item.quantite * item.prix_unitaire)}
@@ -159,6 +181,32 @@ export function ViewOrderDialog({
               </TableBody>
             </Table>
           </div>
+
+          {order.details.some(detail => detail.commentaires && JSON.parse(detail.commentaires)) && (
+            <div>
+              <h3 className="font-semibold mb-2">Options sélectionnées</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Option</TableHead>
+                    <TableHead>Quantité</TableHead>
+                    <TableHead>Prix unitaire</TableHead>
+                    <TableHead>Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {order.details.flatMap(detail => getOptionsDetails(detail)).map((option, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{option.name}</TableCell>
+                      <TableCell>{option.quantity}</TableCell>
+                      <TableCell>{formatCurrency(option.unit_price)}</TableCell>
+                      <TableCell>{formatCurrency(option.total_price)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           {/* Section des remises */}
           <Card>

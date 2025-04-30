@@ -40,6 +40,12 @@ const formSchema = z.object({
     message: "L'adresse doit contenir au moins 5 caractères.",
   }).optional().transform(val => val || ""),
   notes: z.string().optional(),
+  dette: z.number().min(0, {
+    message: "La dette ne peut pas être négative.",
+  }),
+  depot: z.number().min(0, {
+    message: "Le dépôt ne peut pas être négatif.",
+  }),
 })
 
 interface EditClientDialogProps {
@@ -54,6 +60,8 @@ interface EditClientDialogProps {
     telephone: string
     adresse?: string | null
     notes?: string
+    dette: number
+    depot: number
   }) => void
 }
 
@@ -71,6 +79,8 @@ export function EditClientDialog({ open, onOpenChange, client, onUpdateClient }:
       telephone: client.telephone,
       adresse: client.adresse || "",
       notes: "",
+      dette: client.dette,
+      depot: client.depot,
     },
   })
 
@@ -87,6 +97,8 @@ export function EditClientDialog({ open, onOpenChange, client, onUpdateClient }:
         telephone: values.telephone,
         adresse: values.adresse || null,
         notes: values.notes || undefined,
+        dette: values.dette,
+        depot: values.depot,
       })
       onOpenChange(false)
     } catch (err) {
@@ -117,14 +129,15 @@ export function EditClientDialog({ open, onOpenChange, client, onUpdateClient }:
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="informations">Informations principales</TabsTrigger>
             <TabsTrigger value="details">Détails supplémentaires</TabsTrigger>
+            <TabsTrigger value="finance">Finance</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="informations">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <TabsContent value="informations">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -197,28 +210,9 @@ export function EditClientDialog({ open, onOpenChange, client, onUpdateClient }:
                     )}
                   />
                 </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Mise à jour en cours...
-                      </>
-                    ) : (
-                      "Mettre à jour"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
-          
-          <TabsContent value="details">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              </TabsContent>
+              
+              <TabsContent value="details">
                 <FormField
                   control={form.control}
                   name="notes"
@@ -239,25 +233,70 @@ export function EditClientDialog({ open, onOpenChange, client, onUpdateClient }:
                     </FormItem>
                   )}
                 />
-                <Separator />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Mise à jour en cours...
-                      </>
-                    ) : (
-                      "Mettre à jour"
+              </TabsContent>
+              
+              <TabsContent value="finance">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="dette"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dette</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription>Montant de la dette actuelle</FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
+                  />
+                  <FormField
+                    control={form.control}
+                    name="depot"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dépôt</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription>Montant du dépôt actuel</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </TabsContent>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Mise à jour en cours...
+                    </>
+                  ) : (
+                    "Mettre à jour"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </Tabs>
       </DialogContent>
     </Dialog>

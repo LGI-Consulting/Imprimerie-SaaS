@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { CalendarIcon, Plus, Trash2, Upload } from "lucide-react"
+import { CalendarIcon, Plus, Trash2, Upload, User } from "lucide-react"
 import { useDropzone } from 'react-dropzone'
 
 import { Button } from "@/components/ui/button"
@@ -23,9 +23,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { commandes } from "@/lib/api/commandes"
-import  materiaux  from "@/lib/api/materiaux"
-import { Material, Remise } from "@/lib/api/types"
-import { CommandeCreate } from "@/lib/api/commandes"
+import materiaux from "@/lib/api/materiaux"
+import { Materiau, StockMateriauxLargeur, SituationPaiement, MateriauxAvecStocks } from "@/lib/api/types"
 import { formatCurrency } from "@/lib/api/utils"
 import { toast } from "sonner"
 import { clients } from "@/lib/api/client"
@@ -34,7 +33,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { remises } from "@/lib/api/remises"
+import { useAuth } from "@/lib/context/auth-context"
+import { calculateOrderPrice } from "@/lib/utils/price-calculator"
 
 // Form schema
 const formSchema = z.object({
@@ -42,23 +42,20 @@ const formSchema = z.object({
     nom: z.string().min(1, "Le nom est requis"),
     prenom: z.string().min(1, "Le prénom est requis"),
     telephone: z.string().min(1, "Le téléphone est requis"),
-    email: z.string().email("Email invalide").optional(),
-    adresse: z.string().optional(),
+    email: z.string().email("Email invalide").optional().or(z.literal("")),
+    adresse: z.string().optional().or(z.literal("")),
   }),
-  details: z.array(z.object({
-    materiau_id: z.number(),
-    quantite: z.number().min(1, "La quantité doit être supérieure à 0"),
-    dimensions: z.string().refine((val) => {
-      const [largeur, hauteur] = val.split('x').map(Number)
-      return !isNaN(largeur) && !isNaN(hauteur) && largeur > 0 && hauteur > 0
-    }, "Format invalide. Utilisez le format LxH (ex: 100x200)"),
-    prix_unitaire: z.number().min(0, "Le prix unitaire doit être positif"),
-    commentaires: z.string().optional(),
-  })),
+  materiau_id: z.number().min(1, "Le matériau est requis"),
+  dimensions: z.object({
+    largeur: z.number().min(1, "La largeur doit être supérieure à 0"),
+    longueur: z.number().min(1, "La longueur doit être supérieure à 0"),
+  }),
+  quantite: z.number().min(1, "La quantité doit être supérieure à 0"),
+  options: z.record(z.any()).optional(),
+  situation_paiement: z.enum(["credit", "comptant"] as const),
   commentaires: z.string().optional(),
   est_commande_speciale: z.boolean().default(false),
   priorite: z.number().min(0).max(5).default(1),
-  code_remise: z.string().optional(),
 })
 
 interface AddOrderDialogProps {
@@ -68,7 +65,7 @@ interface AddOrderDialogProps {
 }
 
 export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialogProps) {
-  const [materiauList, setMateriauList] = useState<Material[]>([])
+  const [materiauList, setMateriauList] = useState<Materiau[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,7 +74,18 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [remiseInfo, setRemiseInfo] = useState<Remise | null>(null)
+  const [priceCalculation, setPriceCalculation] = useState<{
+    totalPrice: number;
+    unitPrice: number;
+    area: number;
+    selectedWidth: number;
+    materialLengthUsed: number;
+    optionsCost: number;
+    optionsDetails: Record<string, any>;
+  } | null>(null)
+  const { user } = useAuth()
+  const [selectedMateriau, setSelectedMateriau] = useState<Materiau | null>(null)
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({})
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -89,13 +97,13 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
         email: "",
         adresse: "",
       },
-      details: [{
-        materiau_id: 0,
-        quantite: 1,
-        dimensions: "",
-        prix_unitaire: 0,
-        commentaires: "",
-      }],
+      materiau_id: 0,
+      dimensions: {
+        largeur: 0,
+        longueur: 0,
+      },
+      quantite: 1,
+      situation_paiement: "comptant",
       commentaires: "",
       est_commande_speciale: false,
       priorite: 1,
@@ -107,8 +115,7 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     try {
       const response = await materiaux.getAll()
       if (!response) throw new Error('Erreur lors du chargement des matériaux')
-      const data = await response
-      setMateriauList(data)
+      setMateriauList(response)
     } catch (error) {
       console.error('Erreur lors du chargement des matériaux:', error)
       setError('Erreur lors du chargement des matériaux')
@@ -135,101 +142,84 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  const addDetail = () => {
-    const currentDetails = form.getValues("details")
-    form.setValue("details", [
-      ...currentDetails,
-      {
-        materiau_id: 0,
-        quantite: 1,
-        dimensions: "",
-        prix_unitaire: 0,
-        commentaires: "",
-      }
-    ])
-  }
-
-  const removeDetail = (index: number) => {
-    const currentDetails = form.getValues("details")
-    if (currentDetails.length > 1) {
-      form.setValue("details", currentDetails.filter((_, i) => i !== index))
-    }
-  }
-
-  const updatePrixUnitaire = (index: number, materiauId: number) => {
-    const materiau = materiauList.find(m => m.materiau_id === materiauId)
-    if (materiau) {
-      const dimensions = form.getValues(`details.${index}.dimensions`)
-      if (dimensions) {
-        const [largeur, hauteur] = dimensions.split('x').map(Number)
-        if (!isNaN(largeur) && !isNaN(hauteur)) {
-          const surface = largeur * hauteur
-          const prix = materiau.prix_unitaire * surface
-          form.setValue(`details.${index}.prix_unitaire`, prix)
-        }
-      } else {
-        form.setValue(`details.${index}.prix_unitaire`, materiau.prix_unitaire)
-      }
-    }
-  }
-
-  // Calculer le total
-  const calculateTotal = () => {
-    const total = form.getValues("details").reduce((sum, detail) => {
-      return sum + (detail.quantite * detail.prix_unitaire);
-    }, 0);
-    return total;
-  }
-
-  // Vérifier le code remise
-  const checkDiscountCode = useCallback(async (code: string) => {
-    if (!code) {
-      setRemiseInfo(null)
-      return
-    }
+  // Calculer le prix en temps réel
+  const calculatePrice = useCallback(() => {
+    const values = form.getValues()
+    const currentMateriau = materiauList.find(m => m.materiau_id === values.materiau_id)
+    
+    if (!currentMateriau) return
 
     try {
-      const remise = await remises.getByCode(code)
-      if (remise && remises.isValid(remise)) {
-        setRemiseInfo(remise)
-        toast.success("Code de remise appliqué")
-      } else {
-        setRemiseInfo(null)
-        toast.error("Code de remise invalide ou expiré")
+      // Pour l'instant, on utilise une largeur fixe de 100cm pour le calcul
+      // Dans une version future, nous pourrions récupérer les stocks disponibles
+      const stock = {
+        largeur: 100,
+        longeur_en_stock: 1000
+      } as StockMateriauxLargeur
+
+      const calculation = calculateOrderPrice(
+        currentMateriau,
+        stock,
+        values.dimensions,
+        values.quantite
+      )
+
+      // Calculer le coût des options
+      let optionsCost = 0
+      const optionsDetails: Record<string, any> = {}
+
+      if (currentMateriau.options_disponibles && values.options) {
+        Object.entries(values.options).forEach(([key, value]) => {
+          const option = currentMateriau.options_disponibles[key]
+          if (option && !option.is_free) {
+            let cost = 0
+            if (option.type === "fixed") {
+              cost = option.price || 0
+            } else if (option.type === "per_sqm") {
+              cost = calculation.area * (option.price || 0)
+            } else if (option.type === "per_unit" && value.quantity) {
+              cost = value.quantity * (option.price || 0)
+            }
+            optionsCost += cost * values.quantite
+            optionsDetails[key] = {
+              option: key,
+              quantity: value.quantity || 1,
+              unit_price: cost,
+              total_price: cost * values.quantite,
+            }
+          }
+        })
       }
+
+      setPriceCalculation({
+        ...calculation,
+        totalPrice: calculation.totalPrice + optionsCost,
+        optionsCost,
+        optionsDetails
+      })
     } catch (error) {
-      console.error("Erreur lors de la vérification du code remise:", error)
-      setRemiseInfo(null)
-      toast.error("Code de remise invalide")
+      setPriceCalculation(null)
+      toast.error(error instanceof Error ? error.message : "Erreur de calcul")
     }
-  }, [])
+  }, [form, materiauList])
 
-  // Écouter les changements de code remise
+  // Mettre à jour les options quand le matériau change
+  const handleMateriauChange = useCallback((materiauId: number) => {
+    const materiau = materiauList.find(m => m.materiau_id === materiauId)
+    setSelectedMateriau(materiau || null)
+    setSelectedOptions({})
+    form.setValue("options", {})
+  }, [materiauList, form])
+
+  // Recalculer le prix quand les valeurs changent
   useEffect(() => {
-    const code = form.watch("code_remise")
-    if (code) {
-      checkDiscountCode(code)
-    } else {
-      setRemiseInfo(null)
-    }
-  }, [form.watch("code_remise"), checkDiscountCode])
-
-  // Calculer le total avec remise
-  const calculateTotalWithDiscount = () => {
-    const total = calculateTotal()
-    if (!remiseInfo) return total
-    
-    const discountAmount = remises.calculateDiscount(total, remiseInfo)
-    return Math.max(0, total - discountAmount)
-  }
-
-  // Calculer le montant de la remise
-  const calculateDiscountAmount = () => {
-    const total = calculateTotal()
-    if (!remiseInfo) return 0
-    
-    return remises.calculateDiscount(total, remiseInfo)
-  }
+    const subscription = form.watch((value, { name }) => {
+      if (name && ['materiau_id', 'dimensions.largeur', 'dimensions.longueur', 'quantite', 'options'].includes(name)) {
+        calculatePrice()
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [form, calculatePrice])
 
   // Rechercher des clients
   const searchClients = useCallback(async (query: string) => {
@@ -251,7 +241,7 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
   }, [])
 
   // Sélectionner un client
-  const handleClientSelect = (client: Client) => {
+  const handleClientSelect = useCallback((client: Client) => {
     setSelectedClient(client)
     form.setValue("clientInfo", {
       nom: client.nom,
@@ -260,37 +250,68 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
       email: client.email || "",
       adresse: client.adresse || "",
     })
-  }
+  }, [form])
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
-      setLoading(true)
-      setError(null)
+      setIsSubmitting(true);
+      setError(null);
 
-      const orderData = {
-        ...data,
-        files: selectedFiles,
-        remise: remiseInfo ? {
-          remise_id: remiseInfo.remise_id,
-          code_remise: remiseInfo.code_remise,
-          type: remiseInfo.type,
-          valeur: remiseInfo.valeur
-        } : undefined
+      // Vérifier que les champs obligatoires sont présents
+      if (!data.clientInfo.nom || !data.clientInfo.prenom || !data.clientInfo.telephone) {
+        throw new Error("Les informations client sont incomplètes");
       }
 
-      const response = await commandes.create(orderData)
+      // Préparer les données client
+      const clientInfo = {
+        nom: data.clientInfo.nom.trim(),
+        prenom: data.clientInfo.prenom.trim(),
+        telephone: data.clientInfo.telephone.trim(),
+        email: data.clientInfo.email?.trim() || undefined,
+        adresse: data.clientInfo.adresse?.trim() || undefined
+      };
+
+      // Vérifier que les champs obligatoires ne sont pas vides après le trim
+      if (!clientInfo.nom || !clientInfo.prenom || !clientInfo.telephone) {
+        throw new Error("Les champs obligatoires ne peuvent pas être vides");
+      }
+
+      // Préparer les données de la commande
+      const orderData = {
+        clientInfo,
+        materialType: data.materiau_id.toString(),
+        width: parseFloat(data.dimensions.largeur.toString()),
+        length: parseFloat(data.dimensions.longueur.toString()),
+        quantity: parseInt(data.quantite.toString(), 10),
+        options: {
+          comments: data.commentaires || undefined,
+          priorite: data.priorite?.toString() || undefined
+        }
+      };
+
+      // Créer la commande
+      const response = await commandes.create(orderData, selectedFiles);
       
-      toast.success("Commande créée avec succès")
-      onSuccess?.(response)
-      onOpenChange(false)
-    } catch (err) {
-      console.error("Erreur lors de la création de la commande:", err)
-      setError(err instanceof Error ? err.message : "Une erreur est survenue")
-      toast.error("Erreur lors de la création de la commande")
+      toast.success("La commande a été créée avec succès");
+      
+      onSuccess?.(response);
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Erreur lors de la création de la commande:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue lors de la création de la commande"
+      );
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue lors de la création de la commande"
+      );
     } finally {
-      setLoading(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -441,144 +462,123 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
               />
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium">Articles*</h3>
-                <Button type="button" variant="outline" size="sm" onClick={addDetail}>
-                  <Plus className="mr-1 h-4 w-4" /> Ajouter un article
-                </Button>
-              </div>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Matériau</TableHead>
-                      <TableHead>Dimensions</TableHead>
-                      <TableHead>Quantité</TableHead>
-                      <TableHead>Prix unitaire</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {form.getValues("details").map((_, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                            name={`details.${index}.materiau_id`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <Select
-                                  onValueChange={(value) => {
-                                    field.onChange(parseInt(value))
-                                    updatePrixUnitaire(index, parseInt(value))
-                                  }}
-                                  value={field.value.toString()}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="w-[180px]">
-                                      <SelectValue placeholder="Sélectionner" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {materiauList.map((materiau) => (
-                                      <SelectItem 
-                                        key={materiau.materiau_id} 
-                                        value={materiau.materiau_id.toString()}
-                                      >
-                                        {materiau.type_materiau}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                            name={`details.${index}.dimensions`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <FormControl>
-                                  <Input {...field} placeholder="LxH" className="w-[100px]" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                            name={`details.${index}.quantite`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <FormControl>
-                                  <Input 
-                                    type="number" 
-                                    min="1" 
-                                    className="w-[80px]" 
-                                    {...field}
-                                    onChange={e => field.onChange(parseInt(e.target.value))}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <FormField
-                            control={form.control}
-                            name={`details.${index}.prix_unitaire`}
-                            render={({ field }) => (
-                              <FormItem className="space-y-0 mb-0">
-                                <FormControl>
-                                  <Input 
-                                    className="w-[100px]" 
-                                    {...field}
-                                    value={field.value}
-                                    onChange={e => field.onChange(parseFloat(e.target.value))}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(
-                            form.getValues(`details.${index}.quantite`) *
-                            form.getValues(`details.${index}.prix_unitaire`)
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeDetail(index)}
-                            disabled={form.getValues("details").length <= 1}
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="materiau_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matériau</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(parseInt(value))
+                        handleMateriauChange(parseInt(value))
+                      }}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un matériau" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {materiauList.map((materiau) => (
+                          <SelectItem 
+                            key={materiau.materiau_id} 
+                            value={materiau.materiau_id.toString()}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-right font-medium">
-                        Total:
-                      </TableCell>
-                      <TableCell className="font-bold">{formatCurrency(calculateTotal())}</TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                            {materiau.type_materiau}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="dimensions.largeur"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Largeur (cm)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="1" 
+                          {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="dimensions.longueur"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longueur (cm)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="1" 
+                          {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+
+              <FormField
+                control={form.control}
+                name="quantite"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantité</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        {...field}
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="situation_paiement"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mode de paiement</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner le mode de paiement" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="comptant">Comptant</SelectItem>
+                        <SelectItem value="credit">Crédit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="space-y-4">
@@ -665,26 +665,6 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
 
               <FormField
                 control={form.control}
-                name="code_remise"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code de remise</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Entrez le code de remise"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Le code de remise sera appliqué automatiquement si valide
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="commentaires"
                 render={({ field }) => (
                   <FormItem>
@@ -703,24 +683,88 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
               />
             </div>
 
-            <div className="mt-4 space-y-2">
-              <div className="flex justify-between">
-                <span>Prix total:</span>
-                <span>{formatCurrency(calculateTotal())}</span>
+            {selectedMateriau?.options_disponibles && Object.entries(selectedMateriau.options_disponibles).length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Options disponibles</h3>
+                {Object.entries(selectedMateriau.options_disponibles).map(([key, option]) => (
+                  <FormField
+                    key={key}
+                    control={form.control}
+                    name={`options.${key}`}
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={!!field.value}
+                            onChange={(e) => {
+                              const newValue = e.target.checked ? { quantity: 1 } : undefined
+                              field.onChange(newValue)
+                              setSelectedOptions(prev => ({
+                                ...prev,
+                                [key]: newValue
+                              }))
+                            }}
+                            className="accent-primary"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          {option.name || key} {option.price ? `(+${formatCurrency(option.price)})` : ''}
+                        </FormLabel>
+                        {option.type === "per_unit" && field.value && (
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={field.value.quantity || 1}
+                              onChange={(e) => {
+                                const newValue = {
+                                  ...field.value,
+                                  quantity: parseInt(e.target.value)
+                                }
+                                field.onChange(newValue)
+                                setSelectedOptions(prev => ({
+                                  ...prev,
+                                  [key]: newValue
+                                }))
+                              }}
+                              className="w-20"
+                            />
+                          </FormControl>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                ))}
               </div>
-              {remiseInfo && (
-                <>
+            )}
+
+            {priceCalculation && (
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between">
+                  <span>Prix unitaire:</span>
+                  <span>{formatCurrency(priceCalculation.unitPrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Surface totale:</span>
+                  <span>{priceCalculation.area.toFixed(2)} m²</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Longueur de matériau utilisée:</span>
+                  <span>{priceCalculation.materialLengthUsed.toFixed(2)} m</span>
+                </div>
+                {priceCalculation.optionsCost > 0 && (
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Remise ({remises.formatDiscount(remiseInfo)}):</span>
-                    <span>-{formatCurrency(calculateDiscountAmount())}</span>
+                    <span>Coût des options:</span>
+                    <span>{formatCurrency(priceCalculation.optionsCost)}</span>
                   </div>
-                  <div className="flex justify-between font-semibold">
-                    <span>Total après remise:</span>
-                    <span>{formatCurrency(calculateTotalWithDiscount())}</span>
-                  </div>
-                </>
-              )}
-            </div>
+                )}
+                <div className="flex justify-between font-semibold">
+                  <span>Prix total:</span>
+                  <span>{formatCurrency(priceCalculation.totalPrice)}</span>
+                </div>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

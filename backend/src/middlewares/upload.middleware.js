@@ -48,54 +48,61 @@ const fileFilter = (req, file, cb) => {
     // Design files
     '.ai', '.eps', '.psd', '.indd', '.pdf', '.cdr',
     // Documents
-    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf'
+    '.doc', '.docx', '.txt', '.rtf'
   ];
-  
+
   const ext = path.extname(file.originalname).toLowerCase();
-  
   if (allowedFileTypes.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Type de fichier non autorisé. Types acceptés: ${allowedFileTypes.join(', ')}`), false);
+    cb(new Error('Type de fichier non autorisé'), false);
   }
 };
 
-// Set up multer with size limits
-const uploadMiddleware = multer({
+// Create multer instance with configuration
+const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max file size
-    files: 10 // Maximum 10 files per upload
+    fileSize: 10 * 1024 * 1024, // 10MB max file size
+    files: 5 // Maximum 5 files
   }
 });
 
-// Custom error handler for multer
-export const handleMulterErrors = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    // A Multer error occurred during file upload
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        message: 'Erreur: La taille du fichier dépasse la limite autorisée (50MB).' 
-      });
-    } else if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({ 
-        message: 'Erreur: Trop de fichiers téléchargés. Maximum 10 fichiers par requête.' 
-      });
-    } else {
-      return res.status(400).json({ 
-        message: `Erreur lors du téléchargement: ${err.message}` 
-      });
+// Middleware to parse multipart/form-data
+export const parseMultipartForm = (req, res, next) => {
+  // Parse JSON fields from the form data
+  if (req.body.clientInfo) {
+    try {
+      req.body.clientInfo = JSON.parse(req.body.clientInfo);
+    } catch (error) {
+      return res.status(400).json({ message: "Format de données client invalide" });
     }
-  } else if (err) {
-    // An unknown error occurred
-    return res.status(500).json({ 
-      message: err.message || 'Une erreur est survenue lors du téléchargement des fichiers.' 
-    });
   }
-  
-  // If no error, continue to the next middleware
+
+  if (req.body.options) {
+    try {
+      req.body.options = JSON.parse(req.body.options);
+    } catch (error) {
+      return res.status(400).json({ message: "Format d'options invalide" });
+    }
+  }
+
   next();
 };
 
-export { uploadMiddleware };
+// Error handling middleware
+export const handleMulterErrors = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'Fichier trop volumineux (max 10MB)' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ message: 'Trop de fichiers (max 5)' });
+    }
+    return res.status(400).json({ message: err.message });
+  }
+  next(err);
+};
+
+export default upload;

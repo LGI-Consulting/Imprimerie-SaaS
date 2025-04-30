@@ -125,16 +125,11 @@ export function OrdersList({
       
       // Filtrer par code de remise côté client si nécessaire
       let filteredData = commandesData
-      if (filters.code_remise) {
-        filteredData = commandesData.filter(cmd => 
-          cmd.remise && cmd.remise.code === filters.code_remise
-        )
-      }
+      
       
       filteredData && setOrders(filteredData.map(cmd => ({
         ...cmd,
         details: [], // Les détails seront chargés lors de l'ouverture du dialog
-        remise: cmd.remise
       })))
       filteredData && setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
     } catch (err) {
@@ -222,58 +217,13 @@ export function OrdersList({
       en_impression: { label: "En impression", variant: "outline" },
       terminée: { label: "Terminée", variant: "secondary" },
       livrée: { label: "Livrée", variant: "secondary" },
-      annulée: { label: "Annulée", variant: "destructive" }
     }
 
     const config = statusConfig[status]
     return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
-  // Calculer le sous-total d'une commande
-  const calculateSubtotal = (details: DetailCommande[]) => {
-    return details.reduce((total, detail) => {
-      return total + (detail.quantite * detail.prix_unitaire)
-    }, 0)
-  }
 
-  // Calculer la remise d'une commande
-  const calculateDiscount = (order: CommandeWithDetails) => {
-    if (!order.remise || !order.details.length) return 0
-    
-    const subtotal = calculateSubtotal(order.details)
-    
-    if (order.remise.type === 'pourcentage') {
-      return (subtotal * order.remise.valeur) / 100
-    } else {
-      return Math.min(subtotal, order.remise.valeur)
-    }
-  }
-
-  // Calculer le total d'une commande après remise
-  const calculateTotal = (order: CommandeWithDetails) => {
-    const subtotal = calculateSubtotal(order.details)
-    const discount = calculateDiscount(order)
-    return subtotal - discount
-  }
-
-  // Rendu de la remise
-  const renderRemise = (order: CommandeWithDetails) => {
-    if (!order.remise) return null
-
-    return (
-      <div className="flex items-center gap-1 text-green-600">
-        {order.remise.type === 'pourcentage' ? (
-          <Percent className="h-4 w-4" />
-        ) : (
-          <Euro className="h-4 w-4" />
-        )}
-        <span>-{formatCurrency(calculateDiscount(order))}</span>
-        <Badge variant="outline" className="ml-1 text-xs">
-          {order.remise.code}
-        </Badge>
-      </div>
-    )
-  }
 
   const handleStartPrinting = async (order: CommandeWithDetails) => {
     try {
@@ -454,8 +404,6 @@ export function OrdersList({
               <TableHead>Client</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Statut</TableHead>
-              <TableHead className="text-right">Sous-total</TableHead>
-              <TableHead className="text-right">Remise</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -499,14 +447,8 @@ export function OrdersList({
                     {format(new Date(order.date_creation), "dd MMMM yyyy", { locale: fr })}
                   </TableCell>
                   <TableCell>{renderStatus(order.statut)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(calculateSubtotal(order.details))}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {renderRemise(order)}
-                  </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(calculateTotal(order))}
+                    {formatCurrency(order.details[0].sous_total)}
                   </TableCell>
                   <TableCell>
                     {renderActions(order)}
@@ -571,12 +513,6 @@ export function OrdersList({
             },
             created_at: selectedOrder.date_creation,
             id: selectedOrder.commande_id,
-            remise: selectedOrder.remise ? {
-              type: selectedOrder.remise.type,
-              valeur: selectedOrder.remise.valeur,
-              code: selectedOrder.remise.code || undefined,
-              montant_applique: calculateDiscount(selectedOrder)
-            } : undefined
           }}
           open={viewDialogOpen}
           onOpenChange={setViewDialogOpen}

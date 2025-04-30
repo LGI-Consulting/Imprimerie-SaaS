@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -33,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { useAuth } from "@/lib/context/auth-context"
 import { commandes } from "@/lib/api/commandes"
-import { materiaux } from "@/lib/api/materiaux"
+import materiaux from "@/lib/api/materiaux"
 import { remises } from "@/lib/api/remises"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
@@ -45,7 +45,8 @@ import type {
   Materiau, 
   PrintFile, 
   StatutCommande,
-  Remise
+  Remise,
+  StockMateriauxLargeur
 } from "@/lib/api/types"
 
 // Form schema
@@ -56,29 +57,14 @@ const formSchema = z.object({
   priorite: z.number().min(0).max(5).default(1),
   est_commande_speciale: z.boolean().default(false),
   commentaires: z.string().optional(),
-  code_remise: z.string().optional(),
-  details: z
-    .array(
-      z.object({
-        materiau_id: z.number({
-          required_error: "Veuillez sélectionner un matériau",
-        }),
-        quantite: z.number().min(1, {
-          message: "La quantité doit être supérieure à 0",
-        }),
-        dimensions: z.string().refine((val) => {
-          const [largeur, hauteur] = val.split('x').map(Number)
-          return !isNaN(largeur) && !isNaN(hauteur) && largeur > 0 && hauteur > 0
-        }, "Format invalide. Utilisez le format LxH (ex: 100x200)"),
-        prix_unitaire: z.number().min(0, {
-          message: "Le prix unitaire doit être positif",
-        }),
-        commentaires: z.string().optional(),
-      }),
-    )
-    .min(1, {
-      message: "Veuillez ajouter au moins un article à la commande",
-    }),
+  materiau_id: z.number().min(1, "Le matériau est requis"),
+  dimensions: z.object({
+    largeur: z.number().min(1, "La largeur doit être supérieure à 0"),
+    longueur: z.number().min(1, "La longueur doit être supérieure à 0"),
+  }),
+  quantite: z.number().min(1, "La quantité doit être supérieure à 0"),
+  options: z.record(z.any()).optional(),
+  situation_paiement: z.enum(["credit", "comptant"] as const),
 })
 
 interface EditOrderDialogProps {
@@ -114,6 +100,15 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<PrintFile[]>(order.files || [])
   const [uploading, setUploading] = useState(false)
+  const [priceCalculation, setPriceCalculation] = useState<{
+    totalPrice: number;
+    unitPrice: number;
+    area: number;
+    selectedWidth: number;
+    materialLengthUsed: number;
+    optionsCost: number;
+    optionsDetails: Record<string, any>;
+  } | null>(null)
 
   // Charger la liste des matériaux
   useEffect(() => {
@@ -155,168 +150,100 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
       priorite: order.priorite,
       est_commande_speciale: order.est_commande_speciale,
       commentaires: order.commentaires || "",
-      code_remise: order.remise?.code || "",
-      details: order.details.map(detail => ({
-        materiau_id: detail.materiau_id || 0,
-        quantite: detail.quantite,
-        dimensions: detail.dimensions || "",
-        prix_unitaire: detail.prix_unitaire,
-        commentaires: detail.commentaires || "",
-      })),
+      materiau_id: order.details[0]?.materiau_id || 0,
+      dimensions: {
+        largeur: order.details[0]?.dimensions ? parseInt(order.details[0].dimensions.split('x')[0]) : 0,
+        longueur: order.details[0]?.dimensions ? parseInt(order.details[0].dimensions.split('x')[1]) : 0,
+      },
+      quantite: order.details[0]?.quantite || 1,
+      options: order.details[0]?.commentaires ? JSON.parse(order.details[0].commentaires) : {},
+      situation_paiement: order.situation_paiement,
     },
   })
 
-  const addDetail = () => {
-    const currentDetails = form.getValues("details")
-    form.setValue("details", [
-      ...currentDetails,
-      {
-        materiau_id: 0,
-        quantite: 1,
-        dimensions: "",
-        prix_unitaire: 0,
-        commentaires: "",
-      }
-    ])
-  }
-
-  const removeDetail = (index: number) => {
-    const currentDetails = form.getValues("details")
-    if (currentDetails.length > 1) {
-      form.setValue("details", currentDetails.filter((_, i) => i !== index))
-    }
-  }
-
-  const updatePrixUnitaire = (index: number, materiauId: number) => {
-    const materiau = materiauList.find(m => m.materiau_id === materiauId)
-    if (materiau) {
-      const dimensions = form.getValues(`details.${index}.dimensions`)
-      if (dimensions) {
-        const [largeur, hauteur] = dimensions.split('x').map(Number)
-        if (!isNaN(largeur) && !isNaN(hauteur)) {
-          const surface = largeur * hauteur
-          const prix = materiau.prix_unitaire * surface
-          form.setValue(`details.${index}.prix_unitaire`, prix)
-        }
-      } else {
-        form.setValue(`details.${index}.prix_unitaire`, materiau.prix_unitaire)
-      }
-    }
-  }
-
-  // Calculer le sous-total
-  const calculateSubtotal = () => {
-    const details = form.getValues("details")
-    return details.reduce((total, detail) => {
-      return total + (detail.quantite * detail.prix_unitaire)
-    }, 0)
-  }
-
-  // Calculer la remise
-  const calculateDiscount = () => {
-    if (!currentRemise) return 0
+  // Calculer le prix en temps réel
+  const calculatePrice = useCallback(() => {
+    const values = form.getValues()
+    const currentMateriau = materiauList.find(m => m.materiau_id === values.materiau_id)
     
-    const subtotal = calculateSubtotal()
-    
-    if (currentRemise.type === 'pourcentage') {
-      return (subtotal * currentRemise.valeur) / 100
-    } else {
-      return Math.min(subtotal, currentRemise.valeur)
-    }
-  }
-
-  // Calculer le total
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal()
-    const discount = calculateDiscount()
-    return subtotal - discount
-  }
-
-  // Vérifier le code de remise
-  const checkRemiseCode = async (code: string) => {
-    if (!code) {
-      setCurrentRemise(null)
-      setRemiseError(null)
-      return
-    }
-
-    setIsCheckingRemise(true)
-    setRemiseError(null)
+    if (!currentMateriau) return
 
     try {
-      const remise = await remises.getByCode(code)
-      if (remise && remises.isValid(remise)) {
-        setCurrentRemise(remise)
-        toast.success(`Remise de ${remises.formatDiscount(remise)} appliquée`)
-      } else {
-        setCurrentRemise(null)
-        setRemiseError("Code de remise invalide ou expiré")
+      // Pour l'instant, on utilise une largeur fixe de 100cm pour le calcul
+      const stock = {
+        largeur: 100,
+        longeur_en_stock: 1000
+      } as StockMateriauxLargeur
+
+      const calculation = calculateOrderPrice(
+        currentMateriau,
+        stock,
+        values.dimensions,
+        values.quantite
+      )
+
+      // Calculer le coût des options
+      let optionsCost = 0
+      const optionsDetails: Record<string, any> = {}
+
+      if (currentMateriau.options_disponibles && values.options) {
+        Object.entries(values.options).forEach(([key, value]) => {
+          const option = currentMateriau.options_disponibles[key]
+          if (option && !option.is_free) {
+            let cost = 0
+            if (option.type === "fixed") {
+              cost = option.price || 0
+            } else if (option.type === "per_sqm") {
+              cost = calculation.area * (option.price || 0)
+            } else if (option.type === "per_unit" && value.quantity) {
+              cost = value.quantity * (option.price || 0)
+            }
+            optionsCost += cost * values.quantite
+            optionsDetails[key] = {
+              option: key,
+              quantity: value.quantity || 1,
+              unit_price: cost,
+              total_price: cost * values.quantite,
+            }
+          }
+        })
       }
-    } catch (error) {
-      console.error("Erreur lors de la vérification du code de remise:", error)
-      setCurrentRemise(null)
-      setRemiseError("Code de remise non trouvé")
-    } finally {
-      setIsCheckingRemise(false)
-    }
-  }
 
-  // Gérer le changement de code de remise
-  const handleRemiseCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const code = e.target.value
-    form.setValue("code_remise", code)
-    
-    if (code) {
-      checkRemiseCode(code)
-    } else {
-      setCurrentRemise(null)
-      setRemiseError(null)
-    }
-  }
-
-  const handleFileUpload = async (file: File) => {
-    setUploading(true)
-    try {
-      // TODO: Implémenter l'upload de fichier
-      const newFile: PrintFile = {
-        print_file_id: Math.random(),
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        date_upload: new Date().toISOString(),
-        file_path: URL.createObjectURL(file),
-        commande_id: order.commande_id,
-        description: "",
-        uploaded_by: user?.id || 0
-      }
-      setFiles(prev => [...prev, newFile])
+      setPriceCalculation({
+        ...calculation,
+        totalPrice: calculation.totalPrice + optionsCost,
+        optionsCost,
+        optionsDetails
+      })
     } catch (error) {
-      console.error("Erreur lors de l'upload du fichier:", error)
-    } finally {
-      setUploading(false)
+      setPriceCalculation(null)
+      toast.error(error instanceof Error ? error.message : "Erreur de calcul")
     }
-  }
+  }, [form, materiauList])
 
-  const handleDeleteFile = async (fileId: number) => {
-    try {
-      // TODO: Implémenter la suppression du fichier
-      setFiles(prev => prev.filter(file => file.print_file_id !== fileId))
-    } catch (error) {
-      console.error("Erreur lors de la suppression du fichier:", error)
-    }
-  }
+  // Recalculer le prix quand les valeurs changent
+  useEffect(() => {
+    calculatePrice()
+  }, [form.watch(["materiau_id", "dimensions.largeur", "dimensions.longueur", "quantite", "options"]), calculatePrice])
 
   const handleSave = async () => {
     setLoading(true)
     try {
+      const values = form.getValues()
       const updateData = {
-        statut: form.getValues("statut"),
-        priorite: form.getValues("priorite"),
-        est_commande_speciale: form.getValues("est_commande_speciale"),
-        commentaires: form.getValues("commentaires"),
-        details: form.getValues("details"),
+        statut: values.statut as StatutCommande,
+        priorite: values.priorite,
+        est_commande_speciale: values.est_commande_speciale,
+        commentaires: values.commentaires,
+        details: [{
+          materiau_id: values.materiau_id,
+          quantite: values.quantite,
+          dimensions: `${values.dimensions.largeur}x${values.dimensions.longueur}`,
+          prix_unitaire: priceCalculation?.unitPrice || 0,
+          commentaires: JSON.stringify(values.options || {})
+        }],
         files: files.map(file => new File([], file.file_name, { type: file.mime_type || '' })),
-        code_remise: form.getValues("code_remise"),
+        situation_paiement: values.situation_paiement
       }
 
       const updatedOrder = await commandes.update(order.commande_id, updateData)
@@ -436,262 +363,201 @@ export function EditOrderDialog({ open, onOpenChange, order, onSuccess }: EditOr
                 </div>
 
                 {canEditDetails && (
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium">Articles*</h3>
-                      <Button type="button" variant="outline" size="sm" onClick={addDetail}>
-                        <Plus className="mr-1 h-4 w-4" /> Ajouter un article
-                      </Button>
-                    </div>
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Matériau</TableHead>
-                            <TableHead>Dimensions</TableHead>
-                            <TableHead>Quantité</TableHead>
-                            <TableHead>Prix unitaire</TableHead>
-                            <TableHead>Total</TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {form.getValues("details").map((_, index) => (
-                            <TableRow key={index}>
-                              <TableCell>
-                                <FormField
-                                  control={form.control}
-                                  name={`details.${index}.materiau_id`}
-                                  render={({ field }) => (
-                                    <FormItem className="space-y-0 mb-0">
-                                      <Select
-                                        onValueChange={(value) => {
-                                          field.onChange(parseInt(value))
-                                          updatePrixUnitaire(index, parseInt(value))
-                                        }}
-                                        value={field.value.toString()}
-                                      >
-                                        <FormControl>
-                                          <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Sélectionner" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          {materiauList.map((materiau) => (
-                                            <SelectItem 
-                                              key={materiau.materiau_id} 
-                                              value={materiau.materiau_id.toString()}
-                                            >
-                                              {materiau.nom || materiau.type_materiau}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <FormField
-                                  control={form.control}
-                                  name={`details.${index}.dimensions`}
-                                  render={({ field }) => (
-                                    <FormItem className="space-y-0 mb-0">
-                                      <FormControl>
-                                        <Input {...field} placeholder="LxH" className="w-[100px]" />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <FormField
-                                  control={form.control}
-                                  name={`details.${index}.quantite`}
-                                  render={({ field }) => (
-                                    <FormItem className="space-y-0 mb-0">
-                                      <FormControl>
-                                        <Input 
-                                          type="number" 
-                                          min="1" 
-                                          className="w-[80px]" 
-                                          {...field}
-                                          onChange={e => field.onChange(parseInt(e.target.value))}
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <FormField
-                                  control={form.control}
-                                  name={`details.${index}.prix_unitaire`}
-                                  render={({ field }) => (
-                                    <FormItem className="space-y-0 mb-0">
-                                      <FormControl>
-                                        <Input 
-                                          className="w-[100px]" 
-                                          {...field}
-                                          value={field.value}
-                                          onChange={e => field.onChange(parseFloat(e.target.value))}
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {formatCurrency(
-                                  form.getValues(`details.${index}.quantite`) *
-                                  form.getValues(`details.${index}.prix_unitaire`)
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeDetail(index)}
-                                  disabled={form.getValues("details").length <= 1}
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="materiau_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Matériau</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(parseInt(value))
+                              const materiau = materiauList.find(m => m.materiau_id === parseInt(value))
+                              if (materiau) {
+                                form.setValue("options", {})
+                              }
+                            }}
+                            value={field.value.toString()}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sélectionner un matériau" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {materiauList.map((materiau) => (
+                                <SelectItem 
+                                  key={materiau.materiau_id} 
+                                  value={materiau.materiau_id.toString()}
                                 >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-right font-medium">
-                              Total:
-                            </TableCell>
-                            <TableCell className="font-bold">{formatCurrency(calculateSubtotal())}</TableCell>
-                            <TableCell></TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
+                                  {materiau.nom || materiau.type_materiau}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                {canEditRemise && (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <h3 className="font-semibold mb-4">Remises</h3>
-                      
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="dimensions.largeur"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Largeur (cm)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                min="1" 
+                                {...field}
+                                onChange={e => field.onChange(parseFloat(e.target.value))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="dimensions.longueur"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longueur (cm)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number" 
+                                min="1" 
+                                {...field}
+                                onChange={e => field.onChange(parseFloat(e.target.value))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="quantite"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantité</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min="1" 
+                              {...field}
+                              onChange={e => field.onChange(parseInt(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="situation_paiement"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Mode de paiement</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sélectionner le mode de paiement" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="comptant">Comptant</SelectItem>
+                              <SelectItem value="credit">Crédit</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {form.getValues("materiau_id") && materiauList.find(m => m.materiau_id === form.getValues("materiau_id"))?.options_disponibles && (
                       <div className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="code_remise"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Code de remise</FormLabel>
-                              <div className="flex gap-2">
+                        <h3 className="text-lg font-medium">Options disponibles</h3>
+                        {Object.entries(materiauList.find(m => m.materiau_id === form.getValues("materiau_id"))?.options_disponibles || {}).map(([key, option]) => (
+                          <FormField
+                            key={key}
+                            control={form.control}
+                            name={`options.${key}`}
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                                 <FormControl>
-                                  <Input 
-                                    placeholder="Entrez un code de remise" 
-                                    {...field} 
-                                    onChange={handleRemiseCodeChange}
-                                    disabled={isCheckingRemise}
+                                  <input
+                                    type="checkbox"
+                                    checked={!!field.value}
+                                    onChange={(e) => {
+                                      const newValue = e.target.checked ? { quantity: 1 } : undefined
+                                      field.onChange(newValue)
+                                    }}
+                                    className="accent-primary"
                                   />
                                 </FormControl>
-                                <Button 
-                                  type="button" 
-                                  variant="outline" 
-                                  onClick={() => checkRemiseCode(field.value || "")}
-                                  disabled={isCheckingRemise || !field.value}
-                                >
-                                  {isCheckingRemise ? "Vérification..." : "Vérifier"}
-                                </Button>
-                              </div>
-                              {remiseError && (
-                                <p className="text-sm text-red-500 mt-1">{remiseError}</p>
-                              )}
-                              <FormDescription>
-                                Entrez un code de remise valide pour appliquer une réduction à la commande.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        {currentRemise && (
-                          <div className="bg-green-50 p-4 rounded-md border border-green-200">
-                            <div className="flex items-center gap-2 text-green-700 mb-2">
-                              {currentRemise.type === 'pourcentage' ? (
-                                <Percent className="h-5 w-5" />
-                              ) : (
-                                <Euro className="h-5 w-5" />
-                              )}
-                              <h4 className="font-medium">Remise appliquée</h4>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-500">Type:</span>
-                                <Badge variant="outline" className="ml-2">
-                                  {currentRemise.type === 'pourcentage' ? 'Pourcentage' : 'Montant fixe'}
-                                </Badge>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Valeur:</span>
-                                <span className="ml-2 font-medium">
-                                  {currentRemise.type === 'pourcentage' 
-                                    ? `${currentRemise.valeur}%` 
-                                    : formatCurrency(currentRemise.valeur)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Code:</span>
-                                <span className="ml-2 font-medium">{currentRemise.code_remise}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Montant remisé:</span>
-                                <span className="ml-2 font-medium text-green-600">
-                                  -{formatCurrency(calculateDiscount())}
-                                </span>
-                              </div>
-                            </div>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="sm" 
-                              className="mt-2 text-red-500 hover:text-red-700"
-                              onClick={() => {
-                                form.setValue("code_remise", "")
-                                setCurrentRemise(null)
-                              }}
-                            >
-                              <X className="h-4 w-4 mr-1" /> Supprimer la remise
-                            </Button>
+                                <FormLabel className="font-normal">
+                                  {option.name || key} {option.price ? `(+${formatCurrency(option.price)})` : ''}
+                                </FormLabel>
+                                {option.type === "per_unit" && field.value && (
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={field.value.quantity || 1}
+                                      onChange={(e) => {
+                                        field.onChange({
+                                          ...field.value,
+                                          quantity: parseInt(e.target.value)
+                                        })
+                                      }}
+                                      className="w-20"
+                                    />
+                                  </FormControl>
+                                )}
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {priceCalculation && (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span>Prix unitaire:</span>
+                          <span>{formatCurrency(priceCalculation.unitPrice)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Surface totale:</span>
+                          <span>{priceCalculation.area.toFixed(2)} m²</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Longueur de matériau utilisée:</span>
+                          <span>{priceCalculation.materialLengthUsed.toFixed(2)} m</span>
+                        </div>
+                        {priceCalculation.optionsCost > 0 && (
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>Coût des options:</span>
+                            <span>{formatCurrency(priceCalculation.optionsCost)}</span>
                           </div>
                         )}
-                        
-                        <div className="space-y-2 mt-4">
-                          <div className="flex justify-between">
-                            <span>Sous-total</span>
-                            <span>{formatCurrency(calculateSubtotal())}</span>
-                          </div>
-                          
-                          {currentRemise && (
-                            <div className="flex justify-between text-green-600">
-                              <span>Remise</span>
-                              <span>-{formatCurrency(calculateDiscount())}</span>
-                            </div>
-                          )}
-                          
-                          <Separator className="my-2" />
-                          
-                          <div className="flex justify-between font-semibold">
-                            <span>Total</span>
-                            <span>{formatCurrency(calculateTotal())}</span>
-                          </div>
+                        <div className="flex justify-between font-semibold">
+                          <span>Prix total:</span>
+                          <span>{formatCurrency(priceCalculation.totalPrice)}</span>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    )}
+                  </div>
                 )}
 
                 <FormField
