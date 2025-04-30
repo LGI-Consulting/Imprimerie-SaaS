@@ -11,6 +11,7 @@ export interface ClientCreate {
   adresse?: string | null;
   dette?: number;
   depot?: number;
+  notes?: string;
 }
 
 export interface ClientUpdate extends Partial<ClientCreate> {}
@@ -49,29 +50,18 @@ export interface Transaction {
   reference_transaction: string | null;
 }
 
-// Types pour les réponses
-export interface ClientResponse {
-  success: boolean;
+// Types pour les réponses d'erreur
+export interface ErrorResponse {
   message: string;
-  data: Client;
+  error?: string;
 }
 
-export interface ClientsResponse {
-  success: boolean;
-  message: string;
-  data: Client[];
-}
-
+// Types pour les réponses de transaction
 export interface TransactionResponse {
-  success: boolean;
   message: string;
-  data: Transaction;
-}
-
-export interface TransactionsResponse {
-  success: boolean;
-  message: string;
-  data: Transaction[];
+  transaction: Transaction;
+  client: Client;
+  montantEffectif?: number; // Présent uniquement pour payerDette
 }
 
 // Types pour les statistiques et commandes
@@ -98,87 +88,48 @@ export interface ClientOrder {
 // Fonctions pour les clients
 export const clients = {
   getAll: async (): Promise<Client[]> => {
-    const response = await api.get<ClientsResponse>("/clients");
-    return response.data.data;
+    const response = await api.get<Client[]>("/clients");
+    return response.data;
   },
 
   getById: async (id: number): Promise<Client> => {
-    const response = await api.get<ClientResponse>(`/clients/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.message || "Client non trouvé");
-    }
-    return response.data.data;
+    const response = await api.get<Client>(`/clients/${id}`);
+    return response.data;
   },
 
   search: async (query: string): Promise<Client[]> => {
-    const response = await api.get<ClientsResponse>("/clients/search", {
+    const response = await api.get<Client[]>("/clients/search", {
       params: { q: query },
     });
-    return response.data.data;
+    return response.data;
   },
 
   create: async (data: ClientCreate): Promise<Client> => {
-    const response = await api.post<ClientResponse>("/clients", data);
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de la création du client"
-      );
-    }
-    return response.data.data;
+    const response = await api.post<Client>("/clients", data);
+    return response.data;
   },
 
   update: async (id: number, data: ClientUpdate): Promise<Client> => {
-    const response = await api.put<ClientResponse>(`/clients/${id}`, data);
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de la mise à jour du client"
-      );
-    }
-    return response.data.data;
+    const response = await api.put<Client>(`/clients/${id}`, data);
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
-    const response = await api.delete<{ success: boolean; message: string }>(
-      `/clients/${id}`
-    );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de la suppression du client"
-      );
-    }
+    await api.delete(`/clients/${id}`);
   },
 
   // Fonctions pour les commandes et statistiques
   getOrders: async (id: number): Promise<ClientOrder[]> => {
-    const response = await api.get<{
-      success: boolean;
-      message: string;
-      data: ClientOrder[];
-    }>(`/clients/${id}/orders`);
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de la récupération des commandes"
-      );
-    }
-    return response.data.data;
+    const response = await api.get<ClientOrder[]>(`/clients/${id}/orders`);
+    return response.data;
   },
 
   getStats: async (id: number): Promise<ClientStats> => {
-    const response = await api.get<{
-      success: boolean;
-      message: string;
-      data: ClientStats;
-    }>(`/clients/${id}/stats`);
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message ||
-          "Erreur lors de la récupération des statistiques"
-      );
-    }
-    return response.data.data;
+    const response = await api.get<ClientStats>(`/clients/${id}/stats`);
+    return response.data;
   },
 
-  // Nouvelles fonctions pour la gestion des dépôts et dettes
+  // Fonctions pour la gestion des dépôts et dettes
   ajouterDepot: async (
     id: number,
     data: ClientDepotRequest
@@ -187,12 +138,7 @@ export const clients = {
       `/clients/${id}/depot`,
       data
     );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de l'ajout du dépôt"
-      );
-    }
-    return response.data.data;
+    return response.data.transaction;
   },
 
   retirerDepot: async (
@@ -203,12 +149,7 @@ export const clients = {
       `/clients/${id}/retrait`,
       data
     );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors du retrait du dépôt"
-      );
-    }
-    return response.data.data;
+    return response.data.transaction;
   },
 
   payerDette: async (
@@ -219,12 +160,7 @@ export const clients = {
       `/clients/${id}/payer_dette`,
       data
     );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors du paiement de la dette"
-      );
-    }
-    return response.data.data;
+    return response.data.transaction;
   },
 
   imputerDette: async (
@@ -235,25 +171,14 @@ export const clients = {
       `/clients/${id}/imputer_dette`,
       data
     );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message || "Erreur lors de l'imputation de la dette"
-      );
-    }
-    return response.data.data;
+    return response.data.transaction;
   },
 
   getTransactions: async (id: number): Promise<Transaction[]> => {
-    const response = await api.get<TransactionsResponse>(
+    const response = await api.get<Transaction[]>(
       `/clients/${id}/transactions`
     );
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message ||
-          "Erreur lors de la récupération des transactions"
-      );
-    }
-    return response.data.data;
+    return response.data;
   },
 
   // Fonctions utilitaires
@@ -269,7 +194,7 @@ export const clients = {
     return client.adresse !== null && client.adresse !== "";
   },
 
-  // Nouvelles fonctions utilitaires pour les dépôts et dettes
+  // Fonctions utilitaires pour les dépôts et dettes
   getAccountBalance: (client: Client): { depot: number; dette: number } => {
     return {
       depot: client.depot,

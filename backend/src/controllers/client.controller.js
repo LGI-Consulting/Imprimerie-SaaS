@@ -55,7 +55,9 @@ export const createClient = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const employeId = req.body;
+    
+    // Récupérer l'ID d'employé du JWT ou utiliser une valeur par défaut
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
 
     const { nom, prenom, telephone, email, adresse, dette, depot } = req.body;
 
@@ -119,7 +121,10 @@ export const updateClient = async (req, res) => {
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const employeId = req.body;
+    
+    // Récupérer l'ID d'employé du JWT ou utiliser une valeur par défaut
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
+    
     const { nom, prenom, telephone, email, adresse, dette, depot } = req.body;
 
     const checkQuery = "SELECT * FROM clients WHERE client_id = $1";
@@ -184,7 +189,9 @@ export const deleteClient = async (req, res) => {
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const employeId = req.body;
+    
+    // Récupérer l'ID d'employé du JWT ou utiliser une valeur par défaut
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
 
     const checkQuery = "SELECT * FROM clients WHERE client_id = $1";
     const { rows } = await client.query(checkQuery, [clientId]);
@@ -193,6 +200,9 @@ export const deleteClient = async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(404).json({ message: "Client non trouvé." });
     }
+
+    // Récupérer les données client avant suppression pour le journal
+    const { nom, prenom, telephone, email, adresse, dette, depot } = rows[0];
 
     const deleteQuery = "DELETE FROM clients WHERE client_id = $1 RETURNING *";
     await client.query(deleteQuery, [clientId]);
@@ -308,14 +318,17 @@ export const getClientStats = async (req, res) => {
   }
 };
 
-// Ajouter un dépôt pour un client
+// Ajouter un dépôt
 export const ajouterDepot = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const { montant, commentaire, employeId } = req.body;
-
+    
+    // Récupérer le montant et le commentaire, mais utiliser l'ID d'employé de l'authentification
+    const { montant, commentaire } = req.body;
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
+    
     // Vérifier que le client existe
     const checkClientQuery =
       "SELECT client_id, depot FROM clients WHERE client_id = $1";
@@ -394,14 +407,17 @@ export const ajouterDepot = async (req, res) => {
   }
 };
 
-// Retirer du dépôt d'un client
+// Retirer un dépôt
 export const retirerDepot = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const { montant, commentaire, employeId } = req.body;
-
+    
+    // Récupérer le montant et le commentaire, mais utiliser l'ID d'employé de l'authentification
+    const { montant, commentaire } = req.body;
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
+    
     // Vérifier que le client existe et a suffisamment de dépôt
     const checkClientQuery =
       "SELECT client_id, depot FROM clients WHERE client_id = $1";
@@ -488,14 +504,17 @@ export const retirerDepot = async (req, res) => {
   }
 };
 
-// Imputer une dette à un client
+// Imputer une dette
 export const imputerDette = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const { montant, commentaire, employeId } = req.body;
-
+    
+    // Récupérer le montant et le commentaire, mais utiliser l'ID d'employé de l'authentification
+    const { montant, commentaire } = req.body;
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
+    
     // Vérifier que le client existe
     const checkClientQuery =
       "SELECT client_id, dette FROM clients WHERE client_id = $1";
@@ -580,8 +599,11 @@ export const payerDette = async (req, res) => {
   try {
     await client.query("BEGIN");
     const { id: clientId } = req.params;
-    const { montant, commentaire, employeId } = req.body;
-
+    
+    // Récupérer le montant et le commentaire, mais utiliser l'ID d'employé de l'authentification
+    const { montant, commentaire } = req.body;
+    const employeId = req.user?.id || 1; // Utiliser l'ID de l'utilisateur authentifié ou 1 comme ID par défaut
+    
     // Vérifier que le client existe et a une dette
     const checkClientQuery =
       "SELECT client_id, dette FROM clients WHERE client_id = $1";

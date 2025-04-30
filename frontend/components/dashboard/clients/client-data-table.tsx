@@ -4,7 +4,7 @@ import * as React from "react"
 import { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { Eye, MoreHorizontal, Mail, Phone, MapPin, Calendar } from "lucide-react"
+import { Eye, MoreHorizontal, Mail, Phone, MapPin, Calendar, Edit, Trash2, Wallet } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -22,9 +22,10 @@ import { clients } from "@/lib/api/client"
 
 interface ClientDataTableProps {
   data: Client[]
-  onViewClient?: (client: Client) => void
-  onEditClient?: (client: Client) => void
-  onDeleteClient?: (client: Client) => void
+  onViewClient?: (client: Client, e?: React.MouseEvent) => void
+  onEditClient?: (client: Client, e?: React.MouseEvent) => void
+  onDeleteClient?: (client: Client, e?: React.MouseEvent) => void
+  onTransactionsClient?: (client: Client, e?: React.MouseEvent) => void
 }
 
 export function ClientDataTable({
@@ -32,6 +33,7 @@ export function ClientDataTable({
   onViewClient,
   onEditClient,
   onDeleteClient,
+  onTransactionsClient,
 }: ClientDataTableProps) {
   const columns: ColumnDef<Client>[] = [
     {
@@ -131,23 +133,29 @@ export function ClientDataTable({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => onViewClient?.(client)}
+                onClick={(e) => onViewClient?.(client, e)}
               >
                 <Eye className="mr-2 h-4 w-4" />
                 Voir les détails
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onEditClient?.(client)}
+                onClick={(e) => onEditClient?.(client, e)}
               >
-                <Eye className="mr-2 h-4 w-4" />
+                <Edit className="mr-2 h-4 w-4" />
                 Modifier
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => onTransactionsClient?.(client, e)}
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                Transactions
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDeleteClient?.(client)}
+                onClick={(e) => onDeleteClient?.(client, e)}
                 className="text-red-600"
               >
-                <Eye className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 Supprimer
               </DropdownMenuItem>
             </DropdownMenuContent>

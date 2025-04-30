@@ -10,6 +10,7 @@ import { ClientDataTable } from "./client-data-table"
 import { AddClientDialog } from "./add-client-dialog"
 import { EditClientDialog } from "./edit-client-dialog"
 import { ViewClientDialog } from "./view-client-dialog"
+import { TransactionsClientDialog } from "./transactions-client-dialog"
 import { Client } from "@/lib/api/types"
 import { clients } from "@/lib/api/client"
 import { useNotificationStore } from "@/lib/store/notifications"
@@ -30,6 +31,7 @@ export function ClientsList({ filters }: ClientsListProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
+  const [transactionsDialogOpen, setTransactionsDialogOpen] = useState(false)
 
   // Charger les clients
   const loadClients = useCallback(async () => {
@@ -89,19 +91,34 @@ export function ClientsList({ filters }: ClientsListProps) {
   }, [loadClients])
 
   // Gérer les actions sur les clients
-  const handleViewClient = (client: Client) => {
-    setSelectedClient(client)
-    setViewDialogOpen(true)
+  const handleViewClient = (client: Client, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedClient(client);
+    setViewDialogOpen(true);
+    setEditDialogOpen(false);
+    setTransactionsDialogOpen(false);
   }
 
-  const handleEditClient = (client: Client) => {
-    setSelectedClient(client)
-    setEditDialogOpen(true)
+  const handleEditClient = (client: Client, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedClient(client);
+    setEditDialogOpen(true);
+    setViewDialogOpen(false);
+    setTransactionsDialogOpen(false);
   }
 
-  const handleDeleteClient = async (client: Client) => {
+  const handleTransactionsClient = (client: Client, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedClient(client);
+    setTransactionsDialogOpen(true);
+    setViewDialogOpen(false);
+    setEditDialogOpen(false);
+  }
+
+  const handleDeleteClient = async (client: Client, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!confirm(`Êtes-vous sûr de vouloir supprimer le client ${client.prenom} ${client.nom} ?`)) {
-      return
+      return;
     }
 
     try {
@@ -162,16 +179,26 @@ export function ClientsList({ filters }: ClientsListProps) {
     email?: string | null
     telephone: string
     adresse?: string | null
+    notes?: string
   }) => {
     try {
-      await clients.update(clientData.client_id, {
+      const response = await clients.update(clientData.client_id, {
         nom: clientData.nom,
         prenom: clientData.prenom,
         email: clientData.email,
         telephone: clientData.telephone,
         adresse: clientData.adresse,
+        notes: clientData.notes,
       })
+      
       toast.success("Client mis à jour avec succès")
+      
+      // Recharger la liste et mettre à jour le client sélectionné
+      await loadClients()
+      
+      // Récupérer le client mis à jour directement de l'API pour avoir toutes les données à jour
+      const updatedClient = await clients.getById(clientData.client_id)
+      setSelectedClient(updatedClient)
       
       // Ajouter une notification pour la mise à jour
       addNotification(
@@ -184,7 +211,6 @@ export function ClientsList({ filters }: ClientsListProps) {
         "caisse"
       )
       
-      loadClients()
     } catch (err) {
       console.error("Erreur lors de la mise à jour:", err)
       toast.error("Erreur lors de la mise à jour du client")
@@ -213,6 +239,7 @@ export function ClientsList({ filters }: ClientsListProps) {
       onViewClient={handleViewClient}
       onEditClient={handleEditClient}
       onDeleteClient={handleDeleteClient}
+      onTransactionsClient={handleTransactionsClient}
     />
      )
      }
@@ -223,6 +250,7 @@ export function ClientsList({ filters }: ClientsListProps) {
       onViewClient={handleViewClient}
       onEditClient={handleEditClient}
       onDeleteClient={handleDeleteClient}
+      onTransactionsClient={handleTransactionsClient}
     />
      )
      }
@@ -247,6 +275,13 @@ export function ClientsList({ filters }: ClientsListProps) {
             open={viewDialogOpen}
             onOpenChange={setViewDialogOpen}
             client={selectedClient}
+          />
+          
+          <TransactionsClientDialog
+            open={transactionsDialogOpen}
+            onOpenChange={setTransactionsDialogOpen}
+            client={selectedClient}
+            onTransactionSuccess={loadClients}
           />
         </>
       )}
