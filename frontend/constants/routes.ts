@@ -11,6 +11,10 @@ export const ROUTES = {
     EMPLOYEES: "/dashboard/admin/employees",
     SETTINGS: "/dashboard/admin/settings",
     REPORTS: "/dashboard/admin/reports",
+    SPENDINGS: "/dashboard/admin/spendings",
+    COMPTE_EXPLOITANT: "/dashboard/admin/exploitant",
+    BANQUE: "/dashboard/admin/banque",
+    SMT: "/dashboard/admin/smt"
   },
   CAISSE: {
     BASE: "/dashboard/caisse",

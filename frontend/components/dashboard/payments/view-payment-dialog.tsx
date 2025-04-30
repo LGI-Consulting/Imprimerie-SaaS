@@ -14,127 +14,146 @@ import { Badge } from "@/components/ui/badge"
 import { Receipt } from "lucide-react"
 import { DownloadPDFButton } from "@/components/ui/download-pdf-button"
 import { Paiement, Facture } from "@/lib/api/types"
+import { format } from "date-fns"
+import { fr } from "date-fns/locale"
 import { paiements } from "@/lib/api/paiements"
 
 interface ViewPaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   payment: Paiement
-  facture: Facture
+  facture?: Facture
 }
 
 export function ViewPaymentDialog({ open, onOpenChange, payment, facture }: ViewPaymentDialogProps) {
-  // Status badge color mapping
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "validé":
-        return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "en_attente":
-        return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "échoué":
-        return "bg-red-100 text-red-800 hover:bg-red-100"
-      default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-    }
-  }
-
-  // Method badge color mapping
-  const getMethodColor = (method: string) => {
-    switch (method.toLowerCase()) {
-      case "flooz":
-        return "bg-purple-100 text-purple-800 hover:bg-purple-100"
-      case "mixx":
-        return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "espèces":
-        return "bg-green-100 text-green-800 hover:bg-green-100"
-      default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Détails du paiement</DialogTitle>
-          <DialogDescription>Informations détaillées sur le paiement #{payment.paiement_id}</DialogDescription>
+          <DialogDescription>
+            Paiement #{payment.paiement_id}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Paiement #{payment.paiement_id}</h3>
-              <p className="text-sm text-muted-foreground">Commande #{payment.commande_id}</p>
+          <div className="grid gap-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Montant</span>
+              <span className="font-medium">{paiements.formatAmount(payment.montant)}</span>
             </div>
-            <Badge variant="outline" className={getStatusColor(payment.statut)}>
-              {paiements.getStatusLabel(payment.statut)}
-            </Badge>
-          </div>
 
-          <Separator />
+            {payment.methode === 'espèces' && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Montant reçu</span>
+                  <span className="font-medium">{paiements.formatAmount(payment.montant_recu)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Monnaie rendue</span>
+                  <span className="font-medium">{paiements.formatAmount(payment.monnaie_rendue)}</span>
+                </div>
+              </>
+            )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Date</h4>
-              <p>{new Date(payment.date_paiement).toLocaleDateString()}</p>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Reste à payer</span>
+              <span className="font-medium">{paiements.formatAmount(payment.reste_a_payer)}</span>
             </div>
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Montant</h4>
-              <p className="font-semibold">{paiements.formatAmount(payment.montant)}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Méthode</h4>
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Méthode</span>
               <Badge variant="outline" className={getMethodColor(payment.methode)}>
                 {paiements.getPaymentMethodLabel(payment.methode)}
               </Badge>
             </div>
-            <div>
-              <h4 className="text-sm font-medium text-muted-foreground">Statut</h4>
+
+            {payment.reference_transaction && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Référence</span>
+                <span className="font-medium">{payment.reference_transaction}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Statut</span>
               <Badge variant="outline" className={getStatusColor(payment.statut)}>
                 {paiements.getStatusLabel(payment.statut)}
               </Badge>
             </div>
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium">
+                {format(new Date(payment.date_paiement), 'dd/MM/yyyy HH:mm', { locale: fr })}
+              </span>
+            </div>
           </div>
 
-          {payment.methode === "espèces" && (
-            <>
-              <Separator />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Montant reçu</h4>
-                  <p className="font-semibold">{paiements.formatAmount(payment.montant_recu)}</p>
+          {facture && (
+            <div className="border-t pt-4">
+              <h4 className="mb-2 font-medium">Facture associée</h4>
+              <div className="grid gap-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Numéro</span>
+                  <span className="font-medium">{facture.numero_facture}</span>
                 </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Monnaie rendue</h4>
-                  <p className="font-semibold">{paiements.formatAmount(payment.monnaie_rendue)}</p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Montant total</span>
+                  <span className="font-medium">{paiements.formatAmount(facture.montant_total)}</span>
                 </div>
               </div>
-            </>
-          )}
-
-          {payment.reference_transaction && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground">Référence transaction</h4>
-                <p className="text-sm">{payment.reference_transaction}</p>
-              </div>
-            </>
+            </div>
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Fermer
           </Button>
-          <DownloadPDFButton
-            paiement={payment}
-            facture={facture}
-            variant="default"
-            size="default"
-          />
+          
+          {facture && (
+            <DownloadPDFButton
+              paiement={payment}
+              facture={facture}
+              variant="default"
+            >
+              Télécharger le reçu
+            </DownloadPDFButton>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
+}
+
+// Fonction utilitaire pour déterminer la couleur du badge selon le statut
+function getStatusColor(status: string): string {
+  switch (status.toLowerCase()) {
+    case "validé":
+      return "bg-green-100 text-green-800 hover:bg-green-100";
+    case "en_attente":
+      return "bg-blue-100 text-blue-800 hover:bg-blue-100";
+    case "échoué":
+      return "bg-red-100 text-red-800 hover:bg-red-100";
+    default:
+      return "bg-gray-100 text-gray-800 hover:bg-gray-100";
+  }
+}
+
+// Fonction utilitaire pour déterminer la couleur du badge selon la méthode
+function getMethodColor(method: string): string {
+  switch (method.toLowerCase()) {
+    case "flooz":
+      return "bg-purple-100 text-purple-800 hover:bg-purple-100";
+    case "mixx":
+      return "bg-blue-100 text-blue-800 hover:bg-blue-100";
+    case "espèces":
+      return "bg-green-100 text-green-800 hover:bg-green-100";
+    default:
+      return "bg-gray-100 text-gray-800 hover:bg-gray-100";
+  }
 }

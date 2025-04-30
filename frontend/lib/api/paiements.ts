@@ -98,6 +98,17 @@ export const paiements = {
     return response.data.data;
   },
 
+  getByCommandeId: async (commande_id: number): Promise<Paiement[]> => {
+    try {
+      // Cette fonction filtre les paiements par commande_id
+      const allPayments = await paiements.getAll();
+      return allPayments.filter(payment => payment.commande_id === commande_id);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des paiements par commande:", error);
+      return [];
+    }
+  },
+
   create: async (data: PaiementCreate): Promise<{ payment: Paiement; facture?: Facture | undefined }> => {
     const response = await api.post<PaiementResponse>('/paiements', data);
     if (!response.data.data) {

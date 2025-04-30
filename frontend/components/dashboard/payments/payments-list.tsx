@@ -104,7 +104,16 @@ export function PaymentsList() {
   const fetchPayments = React.useCallback(async () => {
     try {
       setLoading(true)
-      const response = await paiements.getPaginated(page, pageSize, filters)
+      const adaptedFilters = {
+        status: filters.statut,
+        method: filters.methode,
+        startDate: filters.dateDebut,
+        endDate: filters.dateFin,
+        minAmount: filters.montantMin,
+        maxAmount: filters.montantMax,
+        search: filters.termeRecherche,
+      };
+      const response = await paiements.getPaginated(page, pageSize, adaptedFilters)
       setPayments(response.payments as PaymentWithFacture[])
       setTotal(response.total)
     } catch (error) {
@@ -151,8 +160,8 @@ export function PaymentsList() {
   const handleDateRangeChange = (range: DateRange | null) => {
     setFilters((prev) => ({
       ...prev,
-      startDate: range?.from?.toISOString(),
-      endDate: range?.to?.toISOString(),
+      dateDebut: range?.from?.toISOString(),
+      dateFin: range?.to?.toISOString(),
     }))
   }
 
@@ -160,9 +169,9 @@ export function PaymentsList() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-4">
         <Select
-          value={filters.status}
+          value={filters.statut}
           onValueChange={(value) =>
-            setFilters((prev) => ({ ...prev, status: value as StatutPaiement }))
+            setFilters((prev) => ({ ...prev, statut: value as StatutPaiement }))
           }
         >
           <SelectTrigger className="w-[180px]">
@@ -177,9 +186,9 @@ export function PaymentsList() {
         </Select>
 
         <Select
-          value={filters.method}
+          value={filters.methode}
           onValueChange={(value) =>
-            setFilters((prev) => ({ ...prev, method: value as MethodePaiement }))
+            setFilters((prev) => ({ ...prev, methode: value as MethodePaiement }))
           }
         >
           <SelectTrigger className="w-[180px]">
@@ -195,10 +204,10 @@ export function PaymentsList() {
 
         <DateRangePicker
           value={
-            filters.startDate || filters.endDate
+            filters.dateDebut || filters.dateFin
               ? {
-                  from: filters.startDate ? new Date(filters.startDate) : undefined,
-                  to: filters.endDate ? new Date(filters.endDate) : undefined,
+                  from: filters.dateDebut ? new Date(filters.dateDebut) : undefined,
+                  to: filters.dateFin ? new Date(filters.dateFin) : undefined,
                 }
               : null
           }
@@ -209,11 +218,11 @@ export function PaymentsList() {
           <Input
             type="number"
             placeholder="Min"
-            value={filters.minAmount || ""}
+            value={filters.montantMin || ""}
             onChange={(e) =>
               setFilters((prev) => ({
                 ...prev,
-                minAmount: e.target.value ? Number(e.target.value) : undefined,
+                montantMin: e.target.value ? Number(e.target.value) : undefined,
               }))
             }
             className="w-[120px]"
@@ -221,11 +230,11 @@ export function PaymentsList() {
           <Input
             type="number"
             placeholder="Max"
-            value={filters.maxAmount || ""}
+            value={filters.montantMax || ""}
             onChange={(e) =>
               setFilters((prev) => ({
                 ...prev,
-                maxAmount: e.target.value ? Number(e.target.value) : undefined,
+                montantMax: e.target.value ? Number(e.target.value) : undefined,
               }))
             }
             className="w-[120px]"

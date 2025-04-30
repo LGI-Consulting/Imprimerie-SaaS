@@ -96,6 +96,17 @@ export const commandes = {
     return response.data.data;
   },
 
+  getUnpaid: async (): Promise<Commande[]> => {
+    try {
+      // Récupérer les commandes avec statut "reçue"
+      const commands = await commandes.getByStatus("reçue");
+      return commands;
+    } catch (error) {
+      console.error("Erreur lors de la récupération des commandes non payées:", error);
+      return [];
+    }
+  },
+
   getByClient: async (clientId: number): Promise<Commande[]> => {
     const response = await api.get<CommandesResponse>(
       `/commandes/client/${clientId}`

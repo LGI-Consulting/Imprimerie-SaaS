@@ -8,7 +8,7 @@ import { generateAndDownloadPaymentPDF } from "@/lib/pdf/generate-payment-pdf";
 import { Paiement, Facture } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-export interface DownloadPDFButtonProps {
+export interface DownloadPDFButtonProps extends React.PropsWithChildren {
   paiement: Paiement;
   facture: Facture;
   onSuccess?: () => void;
@@ -34,6 +34,7 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
       onError,
       retryCount = 3,
       retryDelay = 1000,
+      children,
       ...props
     },
     ref
@@ -102,18 +103,18 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
         {...props}
       >
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
         ) : error ? (
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-4 w-4 mr-2" />
         ) : (
-          <Download className="h-4 w-4" />
+          <Download className="h-4 w-4 mr-2" />
         )}
         <span>
           {isLoading
             ? "Génération..."
             : error
             ? "Réessayer"
-            : "Télécharger le reçu"}
+            : children || "Télécharger le reçu"}
         </span>
       </Button>
     );

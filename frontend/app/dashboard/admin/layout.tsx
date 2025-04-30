@@ -17,6 +17,8 @@ import {
   Printer,
   BarChart2,
   Building2,
+  DollarSign,
+  Ban,
 } from "lucide-react"
 
 interface AdminLayoutProps {
@@ -81,6 +83,26 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       title: "Rapports",
       href: ROUTES.ADMIN.REPORTS,
       icon: BarChart2,
+    },
+    {
+      title: "Depenses",
+      href: ROUTES.ADMIN.SPENDINGS,
+      icon: DollarSign,
+    },
+    {
+      title: "Banque",
+      href: ROUTES.ADMIN.BANQUE,
+      icon: Ban,
+    },
+    {
+      title: "Compte Exploitant",
+      href: ROUTES.ADMIN.COMPTE_EXPLOITANT,
+      icon: Users,
+    },
+    {
+      title: "SMT",
+      href: ROUTES.ADMIN.SMT,
+      icon: Settings,
     },
     {
       title: "Paramètres",

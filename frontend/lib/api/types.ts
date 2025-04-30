@@ -141,6 +141,7 @@ export interface Paiement {
   paiement_id: number;
   commande_id: number;
   montant: number;
+  montant_recu: number;
   monnaie_rendue: number;
   reste_a_payer: number;
   methode: MethodePaiement;
