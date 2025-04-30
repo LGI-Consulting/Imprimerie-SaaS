@@ -41,7 +41,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/commandes', commandeRoutes);
 app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
-app.use('/api/employes', employeRoutes);
+app.use('/api/employe', employeRoutes);
 app.use('/api/remises', remiseRoutes);
 
 // Route de base

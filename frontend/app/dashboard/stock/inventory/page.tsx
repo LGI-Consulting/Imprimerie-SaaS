@@ -7,7 +7,7 @@ import { toast } from "sonner"
 
 import { MaterialManagement } from "@/components/dashboard/inventory/material-management"
 import { UnauthorizedAlert } from "@/components/dashboard/unauthorized-alert"
-import type { Material } from "@/lib/api/types"
+import type { Materiau } from "@/lib/api/types"
 
 export default function InventoryPage() {
   const { user, hasRole } = useAuth()
@@ -30,7 +30,7 @@ export default function InventoryPage() {
     return <UnauthorizedAlert onDismiss={() => router.push("/dashboard")} />
   }
 
-  const handleMaterialSelect = (material: Material) => {
+  const handleMaterialSelect = (material: Materiau) => {
     toast.info(`Stock sélectionné : ${material.type_materiau}`)
     // Ici vous pouvez ajouter la logique pour gérer la sélection d'un matériau
   }

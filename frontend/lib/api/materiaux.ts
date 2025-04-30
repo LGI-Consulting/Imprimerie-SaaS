@@ -1,6 +1,6 @@
 // lib/api/materiaux.ts
 import api from "./config";
-import type { Materiau, StockMateriauxLargeur } from "./types";
+import type { Materiau, StockMateriauxLargeur, StockOperation } from "./types";
 
 // Types pour les requêtes
 export interface MaterialCreateData {
@@ -40,7 +40,7 @@ export interface MaterialListResponse {
 
 export interface StockMovementData {
   type_mouvement: "entrée" | "sortie" | "ajustement";
-  longeur: number;
+  longueur: number;
   commentaire?: string;
 }
 
@@ -80,7 +80,7 @@ const materiaux = {
 
   async search(query: string): Promise<Materiau[]> {
     const response = await api.get<MaterialListResponse>("/materiaux/search", {
-      params: { q: query },
+      params: { term: query },
     });
     return response.data.data;
   },
@@ -89,12 +89,16 @@ const materiaux = {
     stockId: number,
     data: StockMovementData
   ): Promise<void> {
-    await api.post(`/stocks/${stockId}/mouvements`, data);
+    await api.post(`/materiaux/stock/mouvement`, {
+      stock_id: stockId,
+      ...data
+    });
   },
 
-  async moveStock(materiauId: number, stockId: number, longeur: number) {
+  async moveStock(materiauId: number, stockId: number, longueur: number, employeId?: number) {
     return api.patch(`/materiaux/${materiauId}/stocks/${stockId}/move`, {
-      longeur,
+      longueur,
+      employeId,
     });
   },
 
@@ -115,6 +119,16 @@ const materiaux = {
     data: { seuil_alerte?: number; longeur_en_stock?: number }
   ) {
     return api.patch(`/materiaux/${materiauId}/stocks/${stockId}`, data);
+  },
+
+  async getStockHistory(stockId: number) {
+    const response = await api.get(`/materiaux/stock/${stockId}/mouvements`);
+    return response.data.data;
+  },
+
+  async getLowStockMaterials() {
+    const response = await api.get<MaterialListResponse>("/materiaux/stock/low");
+    return response.data.data;
   },
 };
 

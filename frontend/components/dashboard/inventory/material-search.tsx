@@ -7,10 +7,15 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertTriangle, Package, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import materiaux from "@/lib/api/materiaux"
-import type { Material } from "@/lib/api/types"
+import type { Materiau, StockMateriauxLargeur } from "@/lib/api/types"
+
+// Interface étendue pour les matériaux avec leurs stocks
+interface MateriauAvecStocks extends Materiau {
+  stocks: StockMateriauxLargeur[];
+}
 
 interface MaterialSearchProps {
-  onSelect: (material: Material) => void
+  onSelect: (material: MateriauAvecStocks) => void
   className?: string
   placeholder?: string
   showStockStatus?: boolean
@@ -23,7 +28,7 @@ export function MaterialSearch({
   showStockStatus = true
 }: MaterialSearchProps) {
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<Material[]>([])
+  const [results, setResults] = useState<MateriauAvecStocks[]>([])
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -49,7 +54,7 @@ export function MaterialSearch({
       try {
         setLoading(true)
         const searchResults = await materiaux.search(query)
-        setResults(searchResults.slice(0, 5)) // Limiter à 5 résultats
+        setResults(searchResults.slice(0, 5) as MateriauAvecStocks[]) // Limiter à 5 résultats
       } catch (error) {
         console.error("Erreur de recherche:", error)
         setResults([])
@@ -62,12 +67,12 @@ export function MaterialSearch({
     return () => clearTimeout(debounce)
   }, [query])
 
-  const hasLowStock = (material: Material) => {
-    return material.stocks.some(stock => stock.quantite_en_stock <= stock.seuil_alerte)
+  const hasLowStock = (material: MateriauAvecStocks) => {
+    return material.stocks.some((stock: StockMateriauxLargeur) => stock.longeur_en_stock <= stock.seuil_alerte)
   }
 
-  const getTotalStock = (material: Material) => {
-    return material.stocks.reduce((total, stock) => total + stock.quantite_en_stock, 0)
+  const getTotalStock = (material: MateriauAvecStocks) => {
+    return material.stocks.reduce((total: number, stock: StockMateriauxLargeur) => total + stock.longeur_en_stock, 0)
   }
 
   return (

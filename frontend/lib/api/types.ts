@@ -69,7 +69,7 @@ export interface MouvementStock {
   mouvement_id: number;
   stock_id: number;
   type_mouvement: TypeMouvement;
-  quantite: number;
+  longueur: number;
   date_mouvement: string;
   commande_id: number | null;
   employe_id: number | null;
@@ -94,7 +94,7 @@ export interface MateriauxFormData {
 export interface MouvementStockFormData {
   stock_id: number;
   type_mouvement: TypeMouvement;
-  quantite: number;
+  longueur: number;
   commande_id?: number;
   commentaire?: string;
 }
@@ -258,4 +258,19 @@ export interface ClientPayerDetteRequest {
 export interface ClientImputerDetteRequest {
   montant: number;
   commentaire?: string;
+}
+
+export interface StockOperation {
+  materiauId: number;
+  stockId: number;
+  longueur: number;
+  type_mouvement?: TypeMouvement;
+  commentaire?: string;
+}
+
+export interface SurfaceCalculation {
+  largeur: number;
+  longueur: number;
+  surfaceM2: number;
+  valeur: number;
 }

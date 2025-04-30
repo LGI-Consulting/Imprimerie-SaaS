@@ -2,21 +2,26 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Edit, Trash2, AlertTriangle } from "lucide-react"
-import type { Material } from "@/lib/api/types"
+import type { Materiau, StockMateriauxLargeur } from "@/lib/api/types"
+
+// Interface étendue pour les matériaux avec leurs stocks
+interface MateriauAvecStocks extends Materiau {
+  stocks: StockMateriauxLargeur[];
+}
 
 interface MaterialCardProps {
-  material: Material
-  onEdit?: (material: Material) => void
-  onDelete?: (material: Material) => void
+  material: MateriauAvecStocks
+  onEdit?: (material: MateriauAvecStocks) => void
+  onDelete?: (material: MateriauAvecStocks) => void
 }
 
 export function MaterialCard({ material, onEdit, onDelete }: MaterialCardProps) {
   const getTotalStock = () => {
-    return material.stocks.reduce((total, stock) => total + stock.quantite_en_stock, 0)
+    return material.stocks.reduce((total: number, stock: StockMateriauxLargeur) => total + stock.longeur_en_stock, 0);
   }
 
   const hasLowStock = () => {
-    return material.stocks.some(stock => stock.quantite_en_stock <= stock.seuil_alerte)
+    return material.stocks.some((stock: StockMateriauxLargeur) => stock.longeur_en_stock <= stock.seuil_alerte);
   }
 
   return (
@@ -48,13 +53,13 @@ export function MaterialCard({ material, onEdit, onDelete }: MaterialCardProps) 
         <div>
           <p className="text-sm font-medium text-muted-foreground">Largeurs disponibles</p>
           <div className="flex flex-wrap gap-2 mt-1">
-            {material.stocks.map(stock => (
+            {material.stocks.map((stock: StockMateriauxLargeur) => (
               <Badge 
                 key={stock.stock_id} 
-                variant={stock.quantite_en_stock <= stock.seuil_alerte ? "secondary" : "default"}
-                className={stock.quantite_en_stock <= stock.seuil_alerte ? "bg-yellow-100 text-yellow-800" : ""}
+                variant={stock.longeur_en_stock <= stock.seuil_alerte ? "secondary" : "default"}
+                className={stock.longeur_en_stock <= stock.seuil_alerte ? "bg-yellow-100 text-yellow-800" : ""}
               >
-                {stock.largeur} cm ({stock.quantite_en_stock} {material.unite_mesure})
+                {stock.largeur} cm ({stock.longeur_en_stock} {material.unite_mesure})
               </Badge>
             ))}
           </div>
