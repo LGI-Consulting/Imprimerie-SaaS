@@ -45,9 +45,15 @@ export interface StockMovementData {
 }
 
 const materiaux = {
-  async getAll(): Promise<Materiau[]> {
-    const response = await api.get<MaterialListResponse>("/materiaux");
-    return response.data.data;
+  async getAll() {
+    try {
+      const response = await api.get('/materiaux');
+      console.log('API materiaux.getAll - Réponse:', response.data);
+      return response.data.data;
+    } catch (error) {
+      console.error('API materiaux.getAll - Erreur:', error);
+      throw error;
+    }
   },
 
   async getById(id: number): Promise<Materiau> {

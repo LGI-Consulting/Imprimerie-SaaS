@@ -218,21 +218,9 @@ export const getOrdersByMaterial = async (req, res) => {
   }
 };
 
-// Helper functions
-const calculateMaterialPrice = (width, length, unitPrice) => {
-  const area = (width * length) / 10000; // Convert cm² to m²
-  return area * unitPrice;
-};
+// Modifications à apporter à commande.controller.js
 
-const findSuitableMaterialWidth = (requestedWidth, availableWidths) => {
-  const widthWithMargin = requestedWidth + 5;
-  return (
-    availableWidths.find((w) => w >= widthWithMargin) ||
-    Math.max(...availableWidths)
-  );
-};
-
-// Créer une nouvelle commande (version optimisée)
+// Créer une nouvelle commande (version simplifiée)
 export const createOrder = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -245,29 +233,16 @@ export const createOrder = async (req, res) => {
       length,
       quantity = 1,
       options,
+      calculatedPrice, // Données précalculées du frontend
+      orderNumber, // Numéro de commande généré par le frontend
+      est_commande_speciale, // Utiliser la valeur de la case à cocher
     } = req.body;
+    console.log(calculatedPrice)
     const employeId = req.user.employe_id;
 
-    // Validation des données
+    // Validation minimale des données
     if (!clientInfo || !materialType || !width || !length) {
       return res.status(400).json({ message: "Informations manquantes" });
-    }
-
-    // Convertir et valider les dimensions
-    const requestedWidth = parseFloat(width);
-    const requestedLength = parseFloat(length);
-    const numExemplaires = parseInt(quantity, 10) || 1;
-
-    if (
-      isNaN(requestedWidth) ||
-      requestedWidth <= 0 ||
-      isNaN(requestedLength) ||
-      requestedLength <= 0 ||
-      numExemplaires <= 0
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Dimensions ou quantité invalides" });
     }
 
     // Gestion du client (création ou mise à jour)
@@ -292,113 +267,28 @@ export const createOrder = async (req, res) => {
       );
     }
 
-    // Récupération des infos matériau
-    const materialRes = await client.query(
-      `SELECT m.materiau_id, m.prix_unitaire, m.options_disponibles,
-              sml.stock_id, sml.largeur, sml.longeur_en_stock
-       FROM materiaux m
-       JOIN stocks_materiaux_largeur sml ON m.materiau_id = sml.materiau_id
-       WHERE m.type_materiau = $1 AND sml.longeur_en_stock > 0
-       ORDER BY sml.largeur ASC`,
-      [materialType]
-    );
+    // La vérification du stock est maintenant entièrement gérée côté frontend
+    // Nous faisons confiance aux données envoyées par le frontend
 
-    if (materialRes.rows.length === 0) {
-      return res.status(400).json({ message: "Matériau non disponible" });
-    }
-
-    // Sélection de la largeur appropriée
-    const availableWidths = materialRes.rows.map((row) => row.largeur);
-    const selectedWidth = findSuitableMaterialWidth(
-      requestedWidth,
-      availableWidths
-    );
-    const selectedStock = materialRes.rows.find(
-      (row) => row.largeur === selectedWidth
-    );
-
-    // Calculs prix et surface
-    const calculationWidth = selectedWidth - 5; // Applique la règle des -5cm
-    const areaSqM = (calculationWidth * requestedLength) / 10000;
-    const totalAreaSqM = areaSqM * numExemplaires;
-    const materialLengthUsed = (requestedLength / 100) * numExemplaires; // en mètres
-
-    // Vérification stock
-    if (materialLengthUsed > selectedStock.longeur_en_stock) {
-      return res.status(400).json({
-        message: `Stock insuffisant (${materialLengthUsed}m demandés, ${selectedStock.longeur_en_stock}m disponibles)`,
-      });
-    }
-
-    // Calcul du prix de base
-    let basePrice =
-      calculateMaterialPrice(
-        calculationWidth,
-        requestedLength,
-        selectedStock.prix_unitaire
-      ) * numExemplaires;
-
-    // Gestion des options
-    let additionalCosts = 0;
-    const optionsDetails = [];
-    const materialOptions = materialRes.rows[0].options_disponibles || {};
-
-    if (options) {
-      Object.entries(options).forEach(([key, val]) => {
-        if (key === "comments") return;
-
-        const opt = materialOptions[key];
-        if (opt) {
-          let cost = 0;
-          if (opt.type === "fixed") cost = opt.price || 0;
-          else if (opt.type === "per_sqm") cost = areaSqM * (opt.price || 0);
-          else if (opt.type === "per_unit" && val.quantity)
-            cost = val.quantity * (opt.price || 0);
-
-          if (!opt.is_free) {
-            const totalCost = cost * numExemplaires;
-            additionalCosts += totalCost;
-            optionsDetails.push({
-              option: key,
-              quantity: val.quantity || 1,
-              unit_price: cost,
-              total_price: totalCost,
-            });
-          }
-        }
-      });
-    }
-
-    // Détection commande spéciale DG
-    const isDG = clientInfo.nom.toLowerCase().startsWith("d-g");
-
-    // Calcul du prix total
-    let totalPrice = isDG ? 0 : basePrice + additionalCosts;
-
-    // Génération numéro de commande
-    const orderNumber = `CMD-${Date.now().toString().slice(-8)}-${Math.floor(
-      Math.random() * 1000
-    )}`;
-
-    // Création de la commande
+    // Création de la commande avec le numéro généré par le frontend
     const orderRes = await client.query(
       `INSERT INTO commandes (
-        client_id, numero_commande, statut, situation_paiement,
-        employe_reception_id, est_commande_speciale, commentaires
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING commande_id`,
+    client_id, numero_commande, statut, situation_paiement,
+    employe_reception_id, est_commande_speciale, commentaires
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING commande_id`,
       [
         clientId,
         orderNumber,
         "reçue",
-        isDG ? "comptant" : "credit",
+        est_commande_speciale ? "comptant" : "credit",
         employeId,
-        isDG,
+        est_commande_speciale,
         options?.comments || null,
       ]
     );
     const commandeId = orderRes.rows[0].commande_id;
 
-    // Création du détail de commande
+    // Création du détail de commande avec les prix précalculés
     await client.query(
       `INSERT INTO details_commande (
         commande_id, materiau_id, quantite, dimensions,
@@ -406,20 +296,20 @@ export const createOrder = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         commandeId,
-        selectedStock.materiau_id,
-        totalAreaSqM,
+        calculatedPrice.materiau_id,
+        calculatedPrice.area,
         JSON.stringify({
-          largeur_demandee: requestedWidth,
-          longueur: requestedLength,
-          largeur_materiau: selectedWidth,
-          largeur_calcul: calculationWidth,
-          surface_unitaire: areaSqM,
-          nombre_exemplaires: numExemplaires,
+          largeur_demandee: width,
+          longueur: length,
+          largeur_materiau: calculatedPrice.selectedWidth,
+          largeur_calcul: calculatedPrice.selectedWidth - 5,
+          surface_unitaire: calculatedPrice.area / quantity,
+          nombre_exemplaires: quantity,
         }),
-        totalPrice / numExemplaires, // Prix unitaire
-        totalPrice, // Prix total
+        calculatedPrice.totalPrice / quantity, // Prix unitaire
+        calculatedPrice.totalPrice, // Prix total
         JSON.stringify({
-          options: optionsDetails,
+          options: calculatedPrice.optionsDetails,
           commentaires: options?.comments,
         }),
       ]
@@ -467,12 +357,12 @@ export const createOrder = async (req, res) => {
       success: true,
       commande_id: commandeId,
       numero_commande: orderNumber,
-      prix_total: totalPrice,
+      prix_total: calculatedPrice.totalPrice,
       details: {
         materiau: materialType,
-        dimensions: `${requestedWidth}x${requestedLength}cm`,
-        quantite: numExemplaires,
-        options: optionsDetails,
+        dimensions: `${width}x${length}cm`,
+        quantite: quantity,
+        options: calculatedPrice.optionsDetails,
       },
     });
   } catch (error) {

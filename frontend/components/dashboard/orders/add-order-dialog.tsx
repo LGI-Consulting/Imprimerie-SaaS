@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { CalendarIcon, Plus, Trash2, Upload, User } from "lucide-react"
+import { Trash2, Upload } from "lucide-react"
 import { useDropzone } from 'react-dropzone'
 
 import { Button } from "@/components/ui/button"
@@ -20,11 +20,10 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { commandes } from "@/lib/api/commandes"
 import materiaux from "@/lib/api/materiaux"
-import { Materiau, StockMateriauxLargeur, SituationPaiement, MateriauxAvecStocks } from "@/lib/api/types"
+import { StockMateriauxLargeur, MateriauxAvecStocks } from "@/lib/api/types"
 import { formatCurrency } from "@/lib/api/utils"
 import { toast } from "sonner"
 import { clients } from "@/lib/api/client"
@@ -35,6 +34,9 @@ import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/context/auth-context"
 import { calculateOrderPrice } from "@/lib/utils/price-calculator"
+import { generateOrderNumber } from "@/lib/utils/order-number-generator";
+import { validateOrder } from "@/lib/utils/order-validator";
+import { validateStock, findSuitableMaterialWidth } from "@/lib/utils/stock-validator";
 
 // Form schema
 const formSchema = z.object({
@@ -65,7 +67,7 @@ interface AddOrderDialogProps {
 }
 
 export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialogProps) {
-  const [materiauList, setMateriauList] = useState<Materiau[]>([])
+  const [materiauList, setMateriauList] = useState<MateriauxAvecStocks[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +75,6 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
   const [clientsList, setClientsList] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSearching, setIsSearching] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [priceCalculation, setPriceCalculation] = useState<{
     totalPrice: number;
     unitPrice: number;
@@ -82,9 +83,12 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     materialLengthUsed: number;
     optionsCost: number;
     optionsDetails: Record<string, any>;
+  } & {
+    materiau_id?: number;
+    stock_id?: number;
   } | null>(null)
-  const { user } = useAuth()
-  const [selectedMateriau, setSelectedMateriau] = useState<Materiau | null>(null)
+  const { } = useAuth() // Gardons l'import useAuth pour une utilisation future potentielle
+  const [selectedMateriau, setSelectedMateriau] = useState<MateriauxAvecStocks | null>(null)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({})
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -115,7 +119,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     try {
       const response = await materiaux.getAll()
       if (!response) throw new Error('Erreur lors du chargement des matériaux')
-      setMateriauList(response)
+      console.log('Matériaux chargés:', response)
+      // Conversion explicite du type pour s'assurer que les matériaux ont la propriété stocks
+      setMateriauList(response as unknown as MateriauxAvecStocks[])
     } catch (error) {
       console.error('Erreur lors du chargement des matériaux:', error)
       setError('Erreur lors du chargement des matériaux')
@@ -142,11 +148,115 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Ajout d'une fonction pour vérifier le stock en temps réel
+  const checkStockAvailability = useCallback(async () => {
+    const largeur = form.watch('dimensions.largeur');
+    const longueur = form.watch('dimensions.longueur');
+    const quantite = form.watch('quantite');
+    const estCommandeSpeciale = form.watch('est_commande_speciale');
+
+    // Si le matériau n'est pas sélectionné, ne rien faire
+    if (!selectedMateriau) {
+      console.log('Aucun matériau sélectionné pour vérifier le stock');
+      return;
+    }
+
+    // Si les dimensions ou la quantité ne sont pas encore saisies, ne pas afficher d'erreur
+    // mais simplement retourner sans rien faire
+    if (!largeur || !longueur || !quantite) {
+      console.log('Dimensions ou quantité non saisies:', { 
+        largeur, 
+        longueur, 
+        quantite 
+      });
+      // Ne pas définir d'erreur ici, juste retourner
+      return;
+    }
+
+    try {
+      // Trouver le stock approprié
+      const requestedWidth = largeur;
+      const availableWidths = selectedMateriau.stocks?.map(s => s.largeur) || [];
+      console.log('Largeurs disponibles:', availableWidths);
+      
+      const selectedWidth = findSuitableMaterialWidth(requestedWidth, availableWidths);
+      console.log('Largeur sélectionnée:', selectedWidth);
+      
+      console.log('Stocks du matériau:', selectedMateriau.stocks);
+      const stock = selectedMateriau.stocks?.find(s => s.largeur === selectedWidth);
+      console.log('Stock trouvé:', stock);
+
+      if (!stock) {
+        console.error('Aucun stock trouvé pour la largeur', selectedWidth);
+        setError("Stock non disponible pour ce matériau");
+        return;
+      }
+
+      // Vérifier la disponibilité du stock
+      console.log('Vérification du stock avec:', {
+        longueur,
+        quantite,
+        stock: {
+          largeur: stock.largeur,
+          longeur_en_stock: stock.longeur_en_stock,
+          seuil_alerte: stock.seuil_alerte
+        }
+      });
+      
+      const result = validateStock(
+        longueur,
+        quantite,
+        stock
+      );
+      
+      console.log('Résultat de la validation du stock:', result);
+
+      if (!result.available) {
+        setError(result.message || "Stock non disponible");
+      } else if (result.message) {
+        // Stock disponible mais bas
+        toast.warning(result.message);
+        setError(null);
+      } else {
+        setError(null);
+      }
+
+      // Mettre à jour le calcul de prix
+      const calculation = calculateOrderPrice(
+        selectedMateriau,
+        stock,
+        {
+          largeur,
+          longueur
+        },
+        quantite,
+        selectedOptions,
+        estCommandeSpeciale
+      );
+
+      // Ajouter l'ID du matériau pour le backend
+      setPriceCalculation({
+        ...calculation,
+        materiau_id: selectedMateriau.materiau_id,
+        stock_id: stock.stock_id
+      });
+    } catch (err: any) {
+      console.error('Erreur lors de la vérification du stock:', err);
+      setError(err.message);
+    }
+  }, [selectedMateriau, selectedOptions, form]);
+
+  // Appeler la vérification du stock lorsque les valeurs changent
+  useEffect(() => {
+    checkStockAvailability();
+  }, [checkStockAvailability]);
+
   // Calculer le prix en temps réel
   const calculatePrice = useCallback(() => {
     const values = form.getValues()
     const currentMateriau = materiauList.find(m => m.materiau_id === values.materiau_id)
-    
+    const estCommandeSpeciale = values.est_commande_speciale
+
     if (!currentMateriau) return
 
     try {
@@ -161,7 +271,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
         currentMateriau,
         stock,
         values.dimensions,
-        values.quantite
+        values.quantite,
+        values.options,
+        estCommandeSpeciale
       )
 
       // Calculer le coût des options
@@ -211,15 +323,22 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     form.setValue("options", {})
   }, [materiauList, form])
 
-  // Recalculer le prix quand les valeurs changent
+  // Recalculer le prix et vérifier le stock quand les valeurs changent
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      if (name && ['materiau_id', 'dimensions.largeur', 'dimensions.longueur', 'quantite', 'options'].includes(name)) {
-        calculatePrice()
+      if (name && ['materiau_id', 'dimensions.largeur', 'dimensions.longueur', 'quantite', 'options', 'est_commande_speciale'].includes(name)) {
+        calculatePrice();
+        // Ajouter cette ligne pour vérifier le stock à chaque changement pertinent
+        checkStockAvailability();
       }
-    })
-    return () => subscription.unsubscribe()
-  }, [form, calculatePrice])
+    });
+    return () => subscription.unsubscribe();
+  }, [form, calculatePrice, checkStockAvailability]);
+
+  // Supprimer ou modifier cet effet qui ne semble appeler checkStockAvailability qu'une seule fois
+  // useEffect(() => {
+  //   checkStockAvailability();
+  // }, [checkStockAvailability]);
 
   // Rechercher des clients
   const searchClients = useCallback(async (query: string) => {
@@ -252,66 +371,114 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
     })
   }, [form])
 
+
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    try {
-      setIsSubmitting(true);
-      setError(null);
+  setIsSubmitting(true);
+  setError(null);
 
-      // Vérifier que les champs obligatoires sont présents
-      if (!data.clientInfo.nom || !data.clientInfo.prenom || !data.clientInfo.telephone) {
-        throw new Error("Les informations client sont incomplètes");
-      }
+  try {
+    // Validation des données
+    const validationResult = validateOrder({
+      clientInfo: data.clientInfo,
+      width: data.dimensions.largeur,
+      length: data.dimensions.longueur,
+      quantity: data.quantite,
+      materialType: selectedMateriau?.type_materiau,
+      options: data.options
+    });
 
-      // Préparer les données client
-      const clientInfo = {
-        nom: data.clientInfo.nom.trim(),
-        prenom: data.clientInfo.prenom.trim(),
-        telephone: data.clientInfo.telephone.trim(),
-        email: data.clientInfo.email?.trim() || undefined,
-        adresse: data.clientInfo.adresse?.trim() || undefined
-      };
-
-      // Vérifier que les champs obligatoires ne sont pas vides après le trim
-      if (!clientInfo.nom || !clientInfo.prenom || !clientInfo.telephone) {
-        throw new Error("Les champs obligatoires ne peuvent pas être vides");
-      }
-
-      // Préparer les données de la commande
-      const orderData = {
-        clientInfo,
-        materialType: data.materiau_id.toString(),
-        width: parseFloat(data.dimensions.largeur.toString()),
-        length: parseFloat(data.dimensions.longueur.toString()),
-        quantity: parseInt(data.quantite.toString(), 10),
-        options: {
-          comments: data.commentaires || undefined,
-          priorite: data.priorite?.toString() || undefined
-        }
-      };
-
-      // Créer la commande
-      const response = await commandes.create(orderData, selectedFiles);
-      
-      toast.success("La commande a été créée avec succès");
-      
-      onSuccess?.(response);
-      onOpenChange(false);
-    } catch (error) {
-      console.error("Erreur lors de la création de la commande:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Une erreur est survenue lors de la création de la commande"
-      );
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Une erreur est survenue lors de la création de la commande"
-      );
-    } finally {
+    if (!validationResult.valid) {
+      setError(validationResult.message || "Validation échouée");
       setIsSubmitting(false);
+      return;
     }
-  };
+
+    // Trouver le stock approprié
+    const stock = selectedMateriau?.stocks?.find(
+      s => s.largeur === priceCalculation?.selectedWidth
+    );
+
+    if (!stock) {
+      setError("Stock non disponible pour ce matériau");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Vérification du stock (sauf pour les commandes spéciales)
+    if (!data.est_commande_speciale) {
+      const stockCheck = validateStock(
+        data.dimensions.longueur,
+        data.quantite,
+        stock
+      );
+
+      if (!stockCheck.available) {
+        setError(stockCheck.message || "Stock insuffisant");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    // Génération du numéro de commande
+    const orderNumber = generateOrderNumber();
+
+    // Préparation des données pour l'API
+    const orderData = {
+      clientInfo: data.clientInfo,
+      materialType: selectedMateriau?.type_materiau || "",
+      width: data.dimensions.largeur,
+      length: data.dimensions.longueur,
+      quantity: data.quantite,
+      options: {
+        ...data.options,
+        comments: data.commentaires,
+        priorite: data.priorite.toString() // Convertir en chaîne de caractères
+      },
+      // Ajout des données précalculées avec l'ID du matériau
+      calculatedPrice: {
+        ...priceCalculation,
+        materiau_id: selectedMateriau?.materiau_id || 0,
+        stock_id: stock?.stock_id
+      },
+      orderNumber: orderNumber,
+      isDG: data.est_commande_speciale
+    };
+
+    // Envoi des données au serveur
+    const formData = new FormData();
+
+    // Ajouter les fichiers s'ils existent
+    if (selectedFiles.length > 0) {
+      selectedFiles.forEach(file => {
+        formData.append('files', file);
+      });
+    }
+
+    // Ajouter les données de la commande
+    formData.append('orderData', JSON.stringify(orderData));
+
+    const response = await commandes.create(orderData, selectedFiles);
+
+    toast.success("Commande créée avec succès");
+
+    if (onSuccess) {
+      onSuccess(response);
+    }
+
+    // Réinitialiser le formulaire
+    form.reset();
+    setSelectedFiles([]);
+    setSelectedClient(null);
+    setPriceCalculation(null);
+    onOpenChange(false);
+
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message || "Une erreur est survenue lors de la création de la commande");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -335,7 +502,7 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
               <FormField
                 control={form.control}
                 name="clientInfo"
-                render={({ field }) => (
+                render={() => (
                   <FormItem>
                     <FormLabel>Client</FormLabel>
                     <Popover>
@@ -483,8 +650,8 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                       </FormControl>
                       <SelectContent>
                         {materiauList.map((materiau) => (
-                          <SelectItem 
-                            key={materiau.materiau_id} 
+                          <SelectItem
+                            key={materiau.materiau_id}
                             value={materiau.materiau_id.toString()}
                           >
                             {materiau.type_materiau}
@@ -505,9 +672,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                     <FormItem>
                       <FormLabel>Largeur (cm)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="1" 
+                        <Input
+                          type="number"
+                          min="1"
                           {...field}
                           onChange={e => field.onChange(parseFloat(e.target.value))}
                         />
@@ -523,9 +690,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                     <FormItem>
                       <FormLabel>Longueur (cm)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="1" 
+                        <Input
+                          type="number"
+                          min="1"
                           {...field}
                           onChange={e => field.onChange(parseFloat(e.target.value))}
                         />
@@ -543,9 +710,9 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                   <FormItem>
                     <FormLabel>Quantité</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        min="1" 
+                      <Input
+                        type="number"
+                        min="1"
                         {...field}
                         onChange={e => field.onChange(parseInt(e.target.value))}
                       />
@@ -670,10 +837,10 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                   <FormItem>
                     <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Informations supplémentaires sur la commande" 
-                        className="resize-none" 
-                        {...field} 
+                      <Textarea
+                        placeholder="Informations supplémentaires sur la commande"
+                        className="resize-none"
+                        {...field}
                       />
                     </FormControl>
                     <FormDescription>Toute information additionnelle concernant cette commande</FormDescription>
@@ -761,8 +928,17 @@ export function AddOrderDialog({ open, onOpenChange, onSuccess }: AddOrderDialog
                 )}
                 <div className="flex justify-between font-semibold">
                   <span>Prix total:</span>
-                  <span>{formatCurrency(priceCalculation.totalPrice)}</span>
+                  <span>
+                    {form.watch('est_commande_speciale')
+                      ? "Commande spéciale (prix à définir)"
+                      : formatCurrency(priceCalculation.totalPrice)}
+                  </span>
                 </div>
+                {form.watch('est_commande_speciale') && (
+                  <div className="text-sm text-amber-600 italic">
+                    Les commandes spéciales n'ont pas de prix prédéfini.
+                  </div>
+                )}
               </div>
             )}
 

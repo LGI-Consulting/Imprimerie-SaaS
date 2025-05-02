@@ -1,11 +1,11 @@
 // lib/api/paiements.ts
-import api from './config';
-import type { 
-  Paiement, 
+import api from "./config";
+import type {
+  Paiement,
   Facture,
   MethodePaiement,
-  StatutPaiement
-} from './types';
+  StatutPaiement,
+} from "./types";
 
 // Types pour les requêtes
 export interface PaiementCreate {
@@ -86,43 +86,52 @@ export interface PaiementsPaginatedResponse {
 // Fonctions pour les paiements
 export const paiements = {
   getAll: async (): Promise<Paiement[]> => {
-    const response = await api.get<PaiementsResponse>('/paiements');
-    return response.data.data;
+    const response = await api.get<PaiementsResponse>("/paiements");
+    return response.data;
   },
 
-  getById: async (id: number): Promise<{ payment: Paiement; facture?: Facture }> => {
+  getById: async (
+    id: number
+  ): Promise<{ payment: Paiement; facture?: Facture }> => {
     const response = await api.get<PaiementResponse>(`/paiements/${id}`);
-    if (!response.data.data) {
-      throw new Error('Paiement non trouvé');
+    if (!response.data) {
+      throw new Error("Paiement non trouvé");
     }
-    return response.data.data;
+    return response.data;
   },
 
   getByCommandeId: async (commande_id: number): Promise<Paiement[]> => {
     try {
       // Cette fonction filtre les paiements par commande_id
       const allPayments = await paiements.getAll();
-      return allPayments.filter(payment => payment.commande_id === commande_id);
+      return allPayments.filter(
+        (payment) => payment.commande_id === commande_id
+      );
     } catch (error) {
-      console.error("Erreur lors de la récupération des paiements par commande:", error);
+      console.error(
+        "Erreur lors de la récupération des paiements par commande:",
+        error
+      );
       return [];
     }
   },
 
-  create: async (data: PaiementCreate): Promise<{ payment: Paiement; facture?: Facture | undefined }> => {
-    const response = await api.post<PaiementResponse>('/paiements', data);
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la création du paiement');
+  create: async (
+    data: PaiementCreate
+  ): Promise<{ payment: Paiement; facture?: Facture | undefined }> => {
+    const response = await api.post<PaiementResponse>("/paiements", data);
+    if (!response.data) {
+      throw new Error("Erreur lors de la création du paiement");
     }
-    return response.data.data;
+    return response.data;
   },
 
   update: async (id: number, data: PaiementUpdate): Promise<Paiement> => {
     const response = await api.put<PaiementResponse>(`/paiements/${id}`, data);
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la mise à jour du paiement');
+    if (!response.data) {
+      throw new Error("Erreur lors de la mise à jour du paiement");
     }
-    return response.data.data.payment;
+    return response.data.payment;
   },
 
   delete: async (id: number): Promise<void> => {
@@ -131,24 +140,29 @@ export const paiements = {
 
   // Fonctions pour les factures
   getAllFactures: async (): Promise<Facture[]> => {
-    const response = await api.get<FacturesResponse>('/paiements/facture');
-    return response.data.data;
+    const response = await api.get<FacturesResponse>("/paiements/facture");
+    return response.data;
   },
 
-  getFactureById: async (id: number): Promise<{ facture: Facture; payment?: Paiement }> => {
+  getFactureById: async (
+    id: number
+  ): Promise<{ facture: Facture; payment?: Paiement }> => {
     const response = await api.get<FactureResponse>(`/paiements/facture/${id}`);
-    if (!response.data.data) {
-      throw new Error('Facture non trouvée');
+    if (!response.data) {
+      throw new Error("Facture non trouvée");
     }
-    return response.data.data;
+    return response.data;
   },
 
   updateFacture: async (id: number, data: FactureUpdate): Promise<Facture> => {
-    const response = await api.put<FactureResponse>(`/paiements/facture/${id}`, data);
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la mise à jour de la facture');
+    const response = await api.put<FactureResponse>(
+      `/paiements/facture/${id}`,
+      data
+    );
+    if (!response.data) {
+      throw new Error("Erreur lors de la mise à jour de la facture");
     }
-    return response.data.data.facture;
+    return response.data.facture;
   },
 
   deleteFacture: async (id: number): Promise<void> => {
@@ -157,16 +171,16 @@ export const paiements = {
 
   // Fonctions utilitaires
   formatAmount: (amount: number): string => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'XOF'
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
     }).format(amount);
   },
 
   calculateDueDate: (issueDate: string, days: number = 30): string => {
     const date = new Date(issueDate);
     date.setDate(date.getDate() + days);
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   },
 
   isOverdue: (dueDate: string): boolean => {
@@ -177,18 +191,18 @@ export const paiements = {
 
   getPaymentMethodLabel: (method: MethodePaiement): string => {
     const methodMap: Record<MethodePaiement, string> = {
-      'espèces': 'Espèces',
-      'Flooz': 'Mobile money Moov',
-      'Mixx': 'Mobile money Yas'
+      espèces: "Espèces",
+      Flooz: "Mobile money Moov",
+      Mixx: "Mobile money Yas",
     };
     return methodMap[method] || method;
   },
 
   getStatusLabel: (status: StatutPaiement): string => {
     const statusMap: Record<StatutPaiement, string> = {
-      'en_attente': 'En attente',
-      'validé': 'Payé',
-      'échoué': 'Annulé',
+      en_attente: "En attente",
+      validé: "Payé",
+      échoué: "Annulé",
     };
     return statusMap[status] || status;
   },
@@ -206,49 +220,58 @@ export const paiements = {
   }> => {
     // Récupérer toutes les données
     const allPayments = await paiements.getAll();
-    
+
     // Filtrer les données selon les critères
     let filteredPayments = [...allPayments];
-    
+
     if (filters) {
       if (filters.status) {
-        filteredPayments = filteredPayments.filter(p => p.statut === filters.status);
+        filteredPayments = filteredPayments.filter(
+          (p) => p.statut === filters.status
+        );
       }
       if (filters.method) {
-        filteredPayments = filteredPayments.filter(p => p.methode === filters.method);
+        filteredPayments = filteredPayments.filter(
+          (p) => p.methode === filters.method
+        );
       }
       if (filters.startDate) {
         const startDate = new Date(filters.startDate);
-        filteredPayments = filteredPayments.filter(p => new Date(p.date_paiement) >= startDate);
+        filteredPayments = filteredPayments.filter(
+          (p) => new Date(p.date_paiement) >= startDate
+        );
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
-        filteredPayments = filteredPayments.filter(p => new Date(p.date_paiement) <= endDate);
+        filteredPayments = filteredPayments.filter(
+          (p) => new Date(p.date_paiement) <= endDate
+        );
       }
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        filteredPayments = filteredPayments.filter(p => 
-          (p.commande_id.toString().includes(searchLower)) ||
-          (p.paiement_id.toString().includes(searchLower))
+        filteredPayments = filteredPayments.filter(
+          (p) =>
+            p.commande_id.toString().includes(searchLower) ||
+            p.paiement_id.toString().includes(searchLower)
         );
       }
     }
-    
+
     // Calculer la pagination
     const total = filteredPayments.length;
     const totalPages = Math.ceil(total / pageSize);
     const startIndex = (page - 1) * pageSize;
     const endIndex = Math.min(startIndex + pageSize, total);
     const paginatedPayments = filteredPayments.slice(startIndex, endIndex);
-    
+
     return {
       payments: paginatedPayments,
       total,
       page,
       pageSize,
-      totalPages
+      totalPages,
     };
-  }
+  },
 };
 
 export default paiements;

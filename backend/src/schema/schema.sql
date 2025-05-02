@@ -157,7 +157,7 @@ CREATE TABLE sessions_utilisateurs (
 -- Journal des activités
 CREATE TABLE journal_activites (
     log_id SERIAL PRIMARY KEY,
-    employe_id INTEGER REFERENCES employes(employe_id),
+    employe_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,
     date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     details JSONB,

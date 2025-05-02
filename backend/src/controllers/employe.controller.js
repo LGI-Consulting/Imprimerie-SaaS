@@ -64,6 +64,8 @@ export const createEmploye = async (req, res) => {
     await client.query("BEGIN");
     const { nom, prenom, email, telephone, role, password, date_embauche } =
       req.body;
+    // Récupérer l'ID de l'employé qui effectue l'action
+    const actionEmployeId = req.user?.id
 
     const checkQuery = "SELECT * FROM employes WHERE email = $1";
     const { rows } = await client.query(checkQuery, [email]);
@@ -91,6 +93,7 @@ export const createEmploye = async (req, res) => {
       date_embauche,
     ];
     const result = await client.query(insertQuery, values);
+    const newEmployeId = result.rows[0].employe_id;
 
     //journalisation
     await client.query(
@@ -98,16 +101,11 @@ export const createEmploye = async (req, res) => {
        (employe_id, action, details, entite_affectee, entite_id, transaction_id)
        VALUES ($1, 'ajout_employe', $2, 'employes', $3, $4)`,
       [
-        employeId,
+        actionEmployeId, // Utiliser l'ID de l'employé qui effectue l'action
         JSON.stringify({
-          nom: nom,
-          prenom: prenom,
-          email: email,
-          telephone: telephone,
-          role: role,
-          date_embauche: date_embauche,
+          nom, prenom, email, telephone, role, date_embauche,
         }),
-        employeId,
+        newEmployeId,
         null,
       ]
     );
@@ -132,6 +130,8 @@ export const updateEmploye = async (req, res) => {
     await client.query("BEGIN");
     const employeId = req.params.id;
     const { nom, prenom, email, telephone, role, date_embauche } = req.body;
+    // Récupérer l'ID de l'employé qui effectue l'action
+    const actionEmployeId = req.user?.id
 
     const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
@@ -178,14 +178,9 @@ export const updateEmploye = async (req, res) => {
        (employe_id, action, details, entite_affectee, entite_id, transaction_id)
        VALUES ($1, 'mise_a_jour_employe', $2, 'employes', $3, $4)`,
       [
-        employeId,
+        actionEmployeId, // Utiliser l'ID de l'employé qui effectue l'action
         JSON.stringify({
-          nom: nom,
-          prenom: prenom,
-          email: email,
-          telephone: telephone,
-          role: role,
-          date_embauche: date_embauche,
+          nom, prenom, email, telephone, role, date_embauche,
         }),
         employeId,
         null,
@@ -212,6 +207,8 @@ export const changeEmployeStatus = async (req, res) => {
     await client.query("BEGIN");
     const employeId = req.params.id;
     const { est_actif } = req.body;
+    // Récupérer l'ID de l'employé qui effectue l'action
+    const actionEmployeId = req.user?.id
 
     const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
@@ -233,7 +230,7 @@ export const changeEmployeStatus = async (req, res) => {
        (employe_id, action, details, entite_affectee, entite_id, transaction_id)
        VALUES ($1, 'changement_statut_employe', $2, 'employes', $3, $4)`,
       [
-        employeId,
+        actionEmployeId, // Utiliser l'ID de l'employé qui effectue l'action
         JSON.stringify({
           est_actif: est_actif,
         }),
@@ -260,6 +257,8 @@ export const deleteEmploye = async (req, res) => {
   try {
     await client.query("BEGIN");
     const employeId = req.params.id;
+    // Récupérer l'ID de l'employé qui effectue l'action
+    const actionEmployeId = req.user?.id
 
     const checkQuery = "SELECT * FROM employes WHERE employe_id = $1";
     const checkResult = await client.query(checkQuery, [employeId]);
@@ -268,23 +267,28 @@ export const deleteEmploye = async (req, res) => {
       return res.status(404).json({ message: "Employé non trouvé" });
     }
 
-    const deleteQuery = "DELETE FROM employes WHERE employe_id = $1";
-    await client.query(deleteQuery, [employeId]);
-
-    //journalisation
+    // IMPORTANT: Journaliser AVANT de supprimer l'employé
     await client.query(
       `INSERT INTO journal_activites 
        (employe_id, action, details, entite_affectee, entite_id, transaction_id)
        VALUES ($1, 'suppression_employe', $2, 'employes', $3, $4)`,
       [
-        employeId,
+        actionEmployeId, // Utiliser l'ID de l'employé qui effectue l'action (PAS l'employé supprimé)
         JSON.stringify({
           employe_id: employeId,
+          nom: checkResult.rows[0].nom,
+          prenom: checkResult.rows[0].prenom,
+          email: checkResult.rows[0].email
         }),
         employeId,
         null,
       ]
     );
+
+    // Supprimer l'employé APRÈS avoir journalisé l'action
+    const deleteQuery = "DELETE FROM employes WHERE employe_id = $1";
+    await client.query(deleteQuery, [employeId]);
+
     await client.query("COMMIT");
     res.status(200).json({ message: "Employé supprimé avec succès" });
   } catch (error) {
