@@ -135,6 +135,6 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-#upload files
-backend/src/uploads/*
-!backend/src/uploads/.gitkeep
+# Ignore everything in the uploads folder that is in backend
+backend/uploads/*
+!backend/uploads/.gitkeep
