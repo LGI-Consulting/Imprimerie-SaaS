@@ -1,13 +1,51 @@
 import pool from "../config/db.js";
 
 /**
+ * Get payment details for a specific order
+ */
+export const getCommandePaymentDetails = async (req, res) => {
+  try {
+    const { commandeId } = req.params;
+
+    const result = await pool.query(
+      "SELECT * FROM get_commande_payment_details($1)",
+      [commandeId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Commande non trouvée",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Erreur lors de la récupération des détails de paiement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Échec de la récupération des détails de paiement",
+    });
+  }
+};
+
+/**
  * Create a payment and update the related order
  */
 export const createPayment = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { montant, commande_id, methode, reference_transaction, employe_id } =
-      req.body;
+    const { 
+      montant, 
+      commande_id, 
+      methode, 
+      reference_transaction, 
+      employe_id,
+      montant_recu 
+    } = req.body;
 
     if (!montant || !commande_id || !methode) {
       return res.status(400).json({
@@ -17,10 +55,62 @@ export const createPayment = async (req, res) => {
 
     await client.query("BEGIN");
 
+    // Récupérer les détails de paiement de la commande
+    const detailsResult = await client.query(
+      "SELECT * FROM get_commande_payment_details($1)",
+      [commande_id]
+    );
+
+    if (detailsResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        message: "Commande non trouvée",
+      });
+    }
+
+    const details = detailsResult.rows[0];
+    const montantTotal = details.montant_total;
+    const montantDejaPaye = details.montant_paye;
+    const resteAPayer = details.reste_a_payer;
+    const situationPaiement = details.situation_paiement;
+
+    // Vérifier si le montant du paiement est valide
+    if (montant > resteAPayer) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: "Le montant du paiement ne peut pas être supérieur au reste à payer",
+      });
+    }
+
+    // Calculer la monnaie rendue pour les paiements en espèces
+    let monnaieRendue = 0;
+    if (methode === "espèces" && montant_recu) {
+      if (montant_recu < montant) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          success: false,
+          message: "Le montant reçu doit être supérieur ou égal au montant à payer",
+        });
+      }
+      monnaieRendue = montant_recu - montant;
+    }
+
     // Créer le paiement
     const paymentQuery = `
-      INSERT INTO paiements(commande_id, montant, methode, reference_transaction, date_paiement, statut, employe_id)
-      VALUES ($1, $2, $3, $4, NOW(), 'validé', $5)
+      INSERT INTO paiements(
+        commande_id, 
+        montant, 
+        methode, 
+        reference_transaction, 
+        date_paiement, 
+        statut, 
+        employe_id,
+        monnaie_rendue,
+        reste_a_payer
+      )
+      VALUES ($1, $2, $3, $4, NOW(), 'validé', $5, $6, $7)
       RETURNING *
     `;
     const paymentResult = await client.query(paymentQuery, [
@@ -29,23 +119,20 @@ export const createPayment = async (req, res) => {
       methode,
       reference_transaction,
       employe_id,
+      monnaieRendue,
+      resteAPayer - montant
     ]);
     const payment = paymentResult.rows[0];
 
-    // Mettre à jour le statut de la commande
-    await client.query(
-      "UPDATE commandes SET statut = $1, employe_caisse_id = $2 WHERE commande_id = $3",
-      ["payée", employe_id, commande_id]
-    );
+    // Mettre à jour le statut de la commande si le paiement est complet
+    if (montantDejaPaye + montant >= montantTotal) {
+      await client.query(
+        "UPDATE commandes SET statut = $1, employe_caisse_id = $2 WHERE commande_id = $3",
+        ["payée", employe_id, commande_id]
+      );
+    }
 
-    // Récupérer les détails de la commande pour calculer le montant total
-    const detailsResult = await client.query(
-      "SELECT SUM(sous_total) as total FROM details_commande WHERE commande_id = $1",
-      [commande_id]
-    );
-    const montantTotal = detailsResult.rows[0].total || montant;
-
-    // Générer un numéro de facture unique (année + mois + id)
+    // Générer un numéro de facture unique
     const currentDate = new Date();
     const numeroFacture = `FAC-${currentDate.getFullYear()}${(
       currentDate.getMonth() + 1
@@ -55,31 +142,40 @@ export const createPayment = async (req, res) => {
 
     // Créer la facture
     const factureQuery = `
-      INSERT INTO factures(commande_id, numero_facture, date_emission, montant_total, montant_taxe, remise, montant_final, date_paiement)
-      VALUES ($1, $2, NOW(), $3, 0, 0, $3, NOW())
+      INSERT INTO factures(
+        paiement_id,
+        numero_facture, 
+        date_emission, 
+        montant_total, 
+        montant_taxe, 
+        remise, 
+        montant_final
+      )
+      VALUES ($1, $2, NOW(), $3, 0, 0, $3)
       RETURNING *
     `;
     const factureResult = await client.query(factureQuery, [
-      commande_id,
+      payment.paiement_id,
       numeroFacture,
       montantTotal,
     ]);
     const facture = factureResult.rows[0];
 
-    //journalisation
+    // Journalisation
     await client.query(
       `INSERT INTO journal_activites 
        (employe_id, action, details, entite_affectee, entite_id, transaction_id)
-       VALUES ($1, 'ajout_facture', $2, 'factures', $3, $4)`,
+       VALUES ($1, 'ajout_paiement', $2, 'paiements', $3, $4)`,
       [
         employe_id,
         JSON.stringify({
-          numero_facture: numeroFacture,
-          montant_total: montantTotal,
-          montant_final: montantTotal,
+          montant: montant,
+          methode: methode,
+          monnaie_rendue: monnaieRendue,
+          reste_a_payer: resteAPayer - montant,
         }),
         commande_id,
-        null,
+        payment.paiement_id,
       ]
     );
 
@@ -90,6 +186,12 @@ export const createPayment = async (req, res) => {
       data: {
         payment,
         facture,
+        details: {
+          montant_total: montantTotal,
+          montant_deja_paye: montantDejaPaye + montant,
+          reste_a_payer: resteAPayer - montant,
+          situation_paiement: situationPaiement
+        }
       },
       message: "Paiement traité et facture générée avec succès",
     });

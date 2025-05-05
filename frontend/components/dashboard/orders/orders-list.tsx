@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { Eye, MoreHorizontal, FileText, Trash2, Edit2, Printer, Percent, Euro } from "lucide-react"
+import { Eye, MoreHorizontal, FileText, Trash2, Edit2, Printer, Percent, Euro, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -50,6 +50,7 @@ import { Commande, StatutCommande, Client, DetailCommande, Remise, TypeRemise } 
 import { ViewOrderDialog } from "./view-order-dialog"
 import { AddOrderDialog } from "./add-order-dialog"
 import { EditOrderDialog } from "./edit-order-dialog"
+import { ExportOrderDialog } from "./export-order-dialog"
 import { useNotificationStore } from "@/lib/store/notifications"
 import { PrintFile } from "@/lib/api/types"
 
@@ -106,13 +107,14 @@ export function OrdersList({
   const [filters, setFilters] = useState<CommandeFilters>({
     startDate: undefined,
     endDate: undefined,
-    statut: userRole === "graphiste" ? "payée" : undefined,
-    client_nom: undefined, // Ajouter client_nom au lieu de client_id,  // Ajouter client_nom au lieu de client_id
+    statut: userRole === "graphiste" ? "payée" : userRole === "caisse" ? "reçue" : undefined,
+    client_nom: undefined,
     materiau_id: undefined,
     sortBy: "date_creation",
     sortOrder: "desc"
-    // Retirer // Retirer 
   })
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [orderToExport, setOrderToExport] = useState<CommandeWithDetails | null>(null)
 
   // Charger les commandes
   const loadOrders = useCallback(async () => {
@@ -143,6 +145,13 @@ export function OrdersList({
       // Si l'utilisateur est un graphiste, filtrer pour n'afficher que les commandes payées
       if (userRole === "graphiste") {
         filteredData = filteredData.filter(cmd => cmd.statut === "payée")
+      }
+      
+      // Si l'utilisateur est de la caisse, filtrer pour n'afficher que les commandes reçues
+      if (userRole === "caisse") {
+        filteredData = filteredData.filter(cmd => 
+          cmd.statut === "reçue" && !cmd.est_commande_speciale
+        )
       }
       
       // Filtrer par statut si spécifié
@@ -278,11 +287,27 @@ export function OrdersList({
 
   const handleExportPDF = async (order: CommandeWithDetails) => {
     try {
-      // Implémenter l'export PDF
-      toast.success("PDF généré avec succès")
+      // Si les détails ne sont pas déjà chargés, les récupérer
+      if (!order.details || order.details.length === 0) {
+        const fullOrder = await commandes.getById(order.commande_id)
+        if (fullOrder) {
+          // Mettre à jour l'ordre avec les détails complets
+          const updatedOrder = {
+            ...order,
+            details: fullOrder.details || [],
+            files: fullOrder.files || []
+          }
+          setOrderToExport(updatedOrder)
+        } else {
+          setOrderToExport(order)
+        }
+      } else {
+        setOrderToExport(order)
+      }
+      setExportDialogOpen(true)
     } catch (err) {
-      console.error("Erreur lors de la génération du PDF:", err)
-      toast.error("Erreur lors de la génération du PDF")
+      console.error("Erreur lors du chargement des détails:", err)
+      toast.error("Erreur lors du chargement des détails de la commande")
     }
   }
 
@@ -382,7 +407,7 @@ export function OrdersList({
   
     // Tout le monde peut exporter en PDF
     actions.push({
-      label: "Exporter en PDF",
+      label: "Exporter Facture de Commande",
       icon: FileText,
       onClick: () => handleExportPDF(order)
     });
@@ -461,6 +486,15 @@ export function OrdersList({
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => loadOrders()}
+              className="h-10 w-10"
+              title="Actualiser la liste"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}
@@ -639,6 +673,30 @@ export function OrdersList({
           setAddDialogOpen(false)
         }}
       />
+      {orderToExport && (
+        <ExportOrderDialog
+          order={{
+            ...orderToExport,
+            client: {
+              client_id: orderToExport.client_id || 0,
+              nom: orderToExport.client.nom,
+              prenom: orderToExport.client.prenom,
+              email: orderToExport.client.email,
+              telephone: orderToExport.client.telephone,
+              adresse: orderToExport.client.adresse,
+              // Ajouter les propriétés manquantes avec des valeurs par défaut
+              
+            } as Client, // Assertion de type pour s'assurer que TypeScript reconnaît cet objet comme un Client
+            details: orderToExport.details.map(detail => ({
+              ...detail,
+              materiau: detail.materiau || { materiau_id: detail.materiau_id, type_materiau: "" }
+            })) as any,
+            files: orderToExport.files || []
+          }}
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+        />
+      )}
     </div>
   )
 }

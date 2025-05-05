@@ -41,24 +41,12 @@ export const generatePaymentPDF = async (
       },
       commande: {
         numero: commandeDetails.numero_commande,
-        details: commandeDetails.details.map(detail => ({
-          description: detail.commentaires || 'Sans description',
-          dimensions: detail.dimensions || undefined,
-          quantite: detail.quantite,
-          prix_unitaire: detail.prix_unitaire,
-          sous_total: detail.sous_total,
-        })),
       },
       paiement: {
         methode: paiement.methode,
         montant_recu: paiement.montant_recu,
         monnaie_rendue: paiement.monnaie_rendue,
         reference: paiement.reference_transaction || undefined,
-      },
-      montants: {
-        sous_total: facture.montant_total - facture.montant_taxe,
-        remise: facture.remise,
-        total: facture.montant_final,
       },
     };
 
@@ -122,6 +110,112 @@ export const generateAndDownloadPaymentPDF = async (
     downloadPaymentPDF(pdfBlob, fileName);
   } catch (error) {
     console.error('Erreur lors de la génération et du téléchargement du PDF:', error);
+    throw error;
+  }
+};
+
+/**
+ * Génère un ticket de caisse au format PDF
+ * @param paiement - Les données du paiement
+ * @param facture - Les données de la facture associée
+ * @returns Promise<Blob> - Le PDF généré sous forme de Blob
+ */
+export const generateReceiptPDF = async (
+  paiement: Paiement,
+  facture: Facture
+): Promise<Blob> => {
+  try {
+    // Vérification des données requises
+    if (!paiement || !facture) {
+      throw new Error('Les données du paiement et de la facture sont requises');
+    }
+
+    // Récupération des détails de la commande avec les informations client
+    const commandeDetails = await commandes.getById(paiement.commande_id);
+    if (!commandeDetails) {
+      throw new Error('Impossible de récupérer les détails de la commande');
+    }
+
+    // Préparation des données pour le template
+    const receiptData: ReceiptData = {
+      numero_facture: facture.numero_facture,
+      date_emission: facture.date_emission,
+      client: {
+        nom: commandeDetails.client.nom,
+        prenom: commandeDetails.client.prenom,
+        telephone: commandeDetails.client.telephone,
+      },
+      commande: {
+        numero: commandeDetails.numero_commande,
+      },
+      paiement: {
+        methode: paiement.methode,
+        montant_recu: paiement.montant_recu,
+        monnaie_rendue: paiement.monnaie_rendue,
+        reference: paiement.reference_transaction || undefined,
+      },
+    };
+
+    // Génération du PDF
+    const pdfBlob = await pdf(
+      <PaymentReceiptTemplate data={receiptData} />
+    ).toBlob();
+
+    return pdfBlob;
+  } catch (error) {
+    console.error('Erreur lors de la génération du ticket de caisse:', error);
+    throw new Error(
+      `Erreur lors de la génération du ticket de caisse: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
+    );
+  }
+};
+
+/**
+ * Télécharge le ticket de caisse généré
+ * @param pdfBlob - Le PDF sous forme de Blob
+ * @param fileName - Le nom du fichier à télécharger
+ */
+export const downloadReceiptPDF = (pdfBlob: Blob, fileName: string): void => {
+  try {
+    // Création d'un URL pour le Blob
+    const url = URL.createObjectURL(pdfBlob);
+    
+    // Création d'un lien temporaire pour le téléchargement
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    
+    // Ajout du lien au DOM, clic et suppression
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Libération de l'URL
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Erreur lors du téléchargement du ticket de caisse:', error);
+    throw new Error(
+      `Erreur lors du téléchargement du ticket de caisse: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
+    );
+  }
+};
+
+/**
+ * Fonction utilitaire pour générer et télécharger un ticket de caisse
+ * @param paiement - Les données du paiement
+ * @param facture - Les données de la facture associée
+ * @returns Promise<void>
+ */
+export const generateAndDownloadReceiptPDF = async (
+  paiement: Paiement,
+  facture: Facture
+): Promise<void> => {
+  try {
+    const pdfBlob = await generateReceiptPDF(paiement, facture);
+    const fileName = `ticket_${facture.numero_facture}.pdf`;
+    downloadReceiptPDF(pdfBlob, fileName);
+  } catch (error) {
+    console.error('Erreur lors de la génération et du téléchargement du ticket de caisse:', error);
     throw error;
   }
 }; 

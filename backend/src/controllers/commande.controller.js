@@ -789,7 +789,7 @@ export const updateStatus = async (req, res) => {
     
     // Mettre à jour le statut
     await pool.query(
-      "UPDATE commandes SET statut = ? WHERE commande_id = ?",
+      "UPDATE commandes SET statut = $1 WHERE commande_id = $2",
       [statut, id]
     );
     

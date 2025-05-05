@@ -8,7 +8,8 @@ import {
   getAllFactures,
   getFactureById,
   updateFacture,
-  deleteFacture
+  deleteFacture,
+  getCommandePaymentDetails
 } from "../controllers/paiement.controller.js"
 import {
   verifyToken, 
@@ -18,6 +19,9 @@ import {
 const router = express.Router();
 
 router.use(verifyToken);
+
+// Route pour obtenir les détails de paiement d'une commande
+router.get('/commande/:commandeId/details', checkRole(["caisse", "admin"]), getCommandePaymentDetails);
 
 router.post('/',checkRole(["caisse", "admin"]), createPayment);
 router.get('/',checkRole(["caisse", "admin"]), getAllPayments);

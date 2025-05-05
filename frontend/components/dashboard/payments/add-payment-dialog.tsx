@@ -26,7 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { DownloadPDFButton } from "@/components/ui/download-pdf-button"
-
+import { useAuth } from "@/lib/context/auth-context"
 // Importer les types et fonctions de l'API
 import { paiements } from "@/lib/api/paiements"
 import { clients } from "@/lib/api/client"
@@ -43,12 +43,8 @@ const formSchema = z
     commande_id: z.string({
       required_error: "Veuillez sélectionner une commande",
     }),
-    montant: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-      message: "Le montant doit être un nombre positif",
-    }),
-    montant_recu: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-      message: "Le montant reçu doit être un nombre positif",
-    }),
+    montant: z.number().min(0, "Le montant doit être un nombre positif"),
+    montant_recu: z.number().min(0, "Le montant reçu doit être un nombre positif"),
     methode: z.enum(["espèces", "Flooz", "Mixx"], {
       required_error: "Veuillez sélectionner un mode de paiement",
     }),
@@ -57,22 +53,7 @@ const formSchema = z
     date_paiement: z.date({
       required_error: "Veuillez sélectionner une date",
     }),
-  })
-  .refine(
-    (data) => {
-      const montant = Number(data.montant);
-      const montantRecu = Number(data.montant_recu);
-      
-      if (data.methode === "espèces") {
-        return montantRecu >= montant;
-      }
-      return true;
-    },
-    {
-      message: "Le montant reçu doit être supérieur ou égal au montant à payer",
-      path: ["montant_recu"],
-    }
-  );
+  });
 
 interface AddPaymentDialogProps {
   open: boolean
@@ -88,21 +69,24 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
   const [selectedOrder, setSelectedOrder] = useState<Commande | null>(null);
   const [unpaidOrders, setUnpaidOrders] = useState<Commande[]>([]);
   const [resteAPayer, setResteAPayer] = useState<number>(0);
+  const [montantAPayer, setMontantAPayer] = useState<number>(0);
   const [monnaieRendue, setMonnaieRendue] = useState<number>(0);
+  const [resteAPayerApresPaiement, setResteAPayerApresPaiement] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
   // États pour la gestion du succès d'un paiement
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
   const [createdPayment, setCreatedPayment] = useState<Paiement | null>(null);
   const [createdInvoice, setCreatedInvoice] = useState<Facture | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       client_id: "",
       commande_id: "",
-      montant: "",
-      montant_recu: "",
+      montant: 0,
+      montant_recu: 0,
       methode: "espèces",
       description: "",
       reference_transaction: "",
@@ -118,7 +102,9 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
       setSelectedOrder(null);
       setUnpaidOrders([]);
       setResteAPayer(0);
+      setMontantAPayer(0);
       setMonnaieRendue(0);
+      setResteAPayerApresPaiement(0);
       setPaymentSuccess(false);
       setCreatedPayment(null);
       setCreatedInvoice(null);
@@ -152,7 +138,10 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
           const allClientOrders = await commandes.getByClient(selectedClient.client_id);
           
           // Filtrer pour ne garder que les commandes avec statut "reçue" (non payées)
-          const unpaid = allClientOrders.filter(order => order.statut === "reçue");
+          // et exclure les commandes spéciales
+          const unpaid = allClientOrders.filter(order => 
+            order.statut === "reçue" && !order.est_commande_speciale
+          );
           setUnpaidOrders(unpaid);
           
           // Réinitialiser la commande sélectionnée
@@ -182,30 +171,52 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
     const calculateResteAPayer = async () => {
       if (selectedOrder) {
         try {
-          const orderData = await commandes.getById(selectedOrder.commande_id);
-          const totalAmount = orderData?.details.reduce(
-            (sum, detail) => sum + detail.sous_total,
-            0
-          );
-          
-          // Récupérer tous les paiements existants
-          const payments = await paiements.getByCommandeId(selectedOrder.commande_id);
-          const paidAmount = payments ? payments.reduce(
-            (sum, payment) => sum + payment.montant,
-            0
-          ) : 0;
-          
-          const remainingAmount = totalAmount ? totalAmount - paidAmount : 0;
-          setResteAPayer(remainingAmount);
-          form.setValue("montant", remainingAmount.toString());
+          const paymentDetails = await paiements.getCommandePaymentDetails(selectedOrder.commande_id);
+          if (paymentDetails && paymentDetails.reste_a_payer) {
+            const resteAPayerNum = parseFloat(paymentDetails.reste_a_payer);
+            setResteAPayer(resteAPayerNum);
+            form.setValue("montant", resteAPayerNum);
+            form.setValue("montant_recu", resteAPayerNum);
+          } else {
+            throw new Error("Données de paiement invalides");
+          }
         } catch (error) {
           console.error("Erreur lors du calcul du reste à payer:", error);
+          toast({
+            title: "Erreur",
+            description: "Impossible de calculer le reste à payer",
+            variant: "destructive",
+          });
+          setResteAPayer(0);
+          form.setValue("montant", 0);
+          form.setValue("montant_recu", 0);
         }
       }
     };
 
     calculateResteAPayer();
-  }, [selectedOrder, form]);
+  }, [selectedOrder, form, toast]);
+
+  // Mettre à jour le reste à payer et la monnaie rendue
+  useEffect(() => {
+    const montantAPayer = Number(form.watch("montant"));
+    const montantRecu = Number(form.watch("montant_recu"));
+    
+    if (selectedOrder) {
+      // Pour le crédit
+      if (selectedOrder.situation_paiement === "credit") {
+        // Calculer le reste à payer après ce paiement
+        setResteAPayerApresPaiement(Math.max(0, montantAPayer - montantRecu));
+        // Calculer la monnaie à rendre si montant reçu > montant à payer
+        setMonnaieRendue(montantRecu > montantAPayer ? montantRecu - montantAPayer : 0);
+      } 
+      // Pour le comptant
+      else {
+        setResteAPayerApresPaiement(0); // Pas de reste à payer en comptant
+        setMonnaieRendue(montantRecu > montantAPayer ? montantRecu - montantAPayer : 0);
+      }
+    }
+  }, [form.watch("montant"), form.watch("montant_recu"), selectedOrder]);
 
   // Filtrer les clients en fonction de la recherche
   const filteredClients = searchQuery.trim() === "" 
@@ -219,23 +230,72 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
   // Gérer la soumission du formulaire
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
+      const montantAPayer = Number(data.montant);
+      const montantRecu = Number(data.montant_recu);
+
+      // Validation pour le paiement comptant
+      if (selectedOrder?.situation_paiement === "comptant" && montantRecu < montantAPayer) {
+        toast({
+          title: "Erreur",
+          description: "Le montant reçu doit être supérieur ou égal au montant à payer pour une commande comptant",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!user?.id) {
+        toast({
+          title: "Erreur",
+          description: "Impossible d'identifier l'employé",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsLoading(true);
 
       // Créer l'objet conforme à l'interface PaiementCreate
       const paymentData = {
-        amount: Number(data.montant),
-        client_id: selectedClient?.client_id || 0, // Récupérer l'ID du client depuis l'objet client sélectionné
-        payment_method: data.methode,
-        montant_recu: Number(data.montant_recu),
-        monnaie_rendue: data.methode === "espèces" ? Number(data.montant_recu) - Number(data.montant) : 0,
+        montant: montantAPayer,
+        commande_id: selectedOrder?.commande_id || 0,
+        methode: data.methode,
+        montant_recu: montantRecu,
+        monnaie_rendue: Math.max(0, montantRecu - montantAPayer),
         description: data.description || undefined,
+        employe_id: user.id,
       };
 
       const result = await paiements.create(paymentData);
       setCreatedPayment(result.payment);
       setCreatedInvoice(result.facture || null);
       setPaymentSuccess(true);
+
+      // Vérifier si le paiement est complet en utilisant les détails de paiement
+      const paymentDetails = await paiements.getCommandePaymentDetails(selectedOrder?.commande_id || 0);
+      if (paymentDetails && Number(paymentDetails.reste_a_payer) === 0 && selectedOrder) {
+        try {
+          await commandes.updateStatus(selectedOrder.commande_id, "payée");
+          toast({
+            title: "Succès",
+            description: "La commande a été marquée comme payée",
+          });
+        } catch (error) {
+          console.error("Erreur lors de la mise à jour du statut de la commande:", error);
+          toast({
+            title: "Attention",
+            description: "Le paiement a été enregistré mais le statut de la commande n'a pas pu être mis à jour",
+            variant: "destructive",
+          });
+        }
+      }
+
       onAddPayment(result.payment, result.facture);
+      
+      toast({
+        title: "Succès",
+        description: "Le paiement a été enregistré avec succès",
+      });
+      
       onOpenChange(false);
     } catch (error) {
       console.error("Erreur lors de la création du paiement:", error);
@@ -256,7 +316,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
     return (
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Reste à payer:</span>
-        <span>{paiements.formatAmount(resteAPayer)}</span>
+        <span>{paiements.formatAmount(resteAPayer || 0)}</span>
       </div>
     );
   };
@@ -274,7 +334,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouveau paiement</DialogTitle>
         </DialogHeader>
@@ -365,7 +425,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                       <SelectContent>
                         {unpaidOrders.map((order) => (
                           <SelectItem key={order.commande_id} value={order.commande_id.toString()}>
-                            Commande #{order.commande_id} - {format(new Date(order.date_creation), 'dd/MM/yyyy')}
+                            {order.numero_commande} - {format(new Date(order.date_creation), 'dd/MM/yyyy')}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -378,9 +438,34 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
 
             {selectedOrder && (
               <>
-                <div className="text-sm">
-                  <p>Montant total: {paiements.formatAmount(resteAPayer)}</p>
-                  <p>Reste à payer: {paiements.formatAmount(resteAPayer)}</p>
+                <div className="rounded-md border p-4 bg-muted/30">
+                  <h4 className="text-sm font-medium mb-2">Détails de la commande</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Numéro de commande</span>
+                      <span className="font-medium">{selectedOrder.numero_commande}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Date de création</span>
+                      <span className="font-medium">
+                        {format(new Date(selectedOrder.date_creation), 'dd/MM/yyyy')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Montant total</span>
+                      <span className="font-medium">{paiements.formatAmount(resteAPayer)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Reste à payer avant paiement</span>
+                      <span className="font-medium">{paiements.formatAmount(resteAPayer)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Mode de paiement</span>
+                      <span className="font-medium capitalize">
+                        {selectedOrder.situation_paiement === "credit" ? "Crédit" : "Comptant"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <FormField
@@ -393,8 +478,9 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                         <Input
                           {...field}
                           type="number"
-                          min="0"
-                          max={resteAPayer.toString()}
+                          disabled={true}
+                          value={field.value}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
                         />
                       </FormControl>
                       <FormMessage />
@@ -409,7 +495,11 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                     <FormItem>
                       <FormLabel>Méthode de paiement</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("montant_recu", form.watch("montant"));
+                          setMonnaieRendue(0);
+                        }}
                         value={field.value}
                       >
                         <SelectTrigger>
@@ -426,36 +516,35 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                   )}
                 />
 
-                {form.watch("methode") === "espèces" && (
-                  <FormField
-                    control={form.control}
-                    name="montant_recu"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Montant reçu</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            min={form.watch("montant")}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              const montantRecu = Number(e.target.value);
-                              const montant = Number(form.watch("montant"));
-                              setMonnaieRendue(montantRecu - montant);
-                            }}
-                          />
-                        </FormControl>
-                        {monnaieRendue > 0 && (
-                          <FormDescription>
-                            Monnaie à rendre: {paiements.formatAmount(monnaieRendue)}
-                          </FormDescription>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                <FormField
+                  control={form.control}
+                  name="montant_recu"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Montant reçu</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min={selectedOrder.situation_paiement === "comptant" ? resteAPayer : "0"}
+                          value={field.value}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      {selectedOrder.situation_paiement === "credit" && (
+                        <FormDescription>
+                          Reste à payer après ce paiement: {paiements.formatAmount(resteAPayerApresPaiement)}
+                        </FormDescription>
+                      )}
+                      {monnaieRendue > 0 && (
+                        <FormDescription>
+                          Monnaie à rendre: {paiements.formatAmount(monnaieRendue)}
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {(form.watch("methode") === "Flooz" || form.watch("methode") === "Mixx") && (
                   <FormField
@@ -465,7 +554,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                       <FormItem>
                         <FormLabel>Référence de transaction</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} placeholder="Entrez la référence de la transaction" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

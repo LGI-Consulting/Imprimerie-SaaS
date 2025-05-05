@@ -159,27 +159,93 @@ export function AddOrderDialog({
       commentaires: "",
       est_commande_speciale: false,
       priorite: 1,
+      options: {},
+      situation_paiement: "comptant",
     },
   });
 
-  // Charger la liste des matériaux
-  const loadMateriaux = useCallback(async () => {
-    try {
-      const response = await materiaux.getAll();
-      if (!response) throw new Error("Erreur lors du chargement des matériaux");
-      console.log("Matériaux chargés:", response);
-      // Conversion explicite du type pour s'assurer que les matériaux ont la propriété stocks
-      setMateriauList(response as unknown as MateriauxAvecStocks[]);
-    } catch (error) {
-      console.error("Erreur lors du chargement des matériaux:", error);
-      setError("Erreur lors du chargement des matériaux");
+  // Fonction pour gérer la fermeture du dialog
+  const handleDialogClose = (isOpen: boolean) => {
+    // Si le dialog se ferme
+    if (!isOpen) {
+      // Réinitialiser le formulaire
+      form.reset({
+        clientInfo: {
+          nom: "",
+          prenom: "",
+          telephone: "",
+          email: "",
+          adresse: "",
+        },
+        materiau_id: 0,
+        dimensions: {
+          largeur: 0,
+          longueur: 0,
+        },
+        quantite: 1,
+        commentaires: "",
+        est_commande_speciale: false,
+        priorite: 1,
+        options: {},
+        situation_paiement: "comptant",
+      });
+      
+      // Réinitialiser tous les états
+      setSelectedFiles([]);
+      setError(null);
+      setClientSearch("");
+      setFilteredClients([]);
+      setSelectedClient(null);
+      setPriceCalculation(null);
+      setSelectedMateriau(null);
+      setSelectedOptions({});
+      setSelectedWidth(null);
     }
-  }, []);
+    
+    // Appeler la fonction onOpenChange fournie par le parent
+    onOpenChange(isOpen);
+  };
 
-  // Charger les matériaux au montage du composant
+  // Charger les données initiales lorsque le dialog s'ouvre
   useEffect(() => {
-    loadMateriaux();
-  }, [loadMateriaux]);
+    if (open) {
+      // Charger la liste des matériaux
+      const loadMateriaux = async () => {
+        try {
+          const data = await materiaux.getAll();
+          setMateriauList(data);
+        } catch (err) {
+          console.error("Erreur lors du chargement des matériaux:", err);
+          setError("Erreur lors du chargement des matériaux");
+        }
+      };
+
+      // Charger la liste des clients
+      const loadClients = async () => {
+        try {
+          const data = await clients.getAll();
+          setClientsList(data);
+        } catch (err) {
+          console.error("Erreur lors du chargement des clients:", err);
+        }
+      };
+
+      loadMateriaux();
+      loadClients();
+      
+      // Réinitialiser le formulaire et les états
+      form.reset();
+      setSelectedFiles([]);
+      setError(null);
+      setClientSearch("");
+      setFilteredClients([]);
+      setSelectedClient(null);
+      setPriceCalculation(null);
+      setSelectedMateriau(null);
+      setSelectedOptions({});
+      setSelectedWidth(null);
+    }
+  }, [open, form]);
 
   // Configuration de dropzone pour les fichiers
   const { getRootProps, getInputProps } = useDropzone({
@@ -705,7 +771,7 @@ export function AddOrderDialog({
   
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouvelle commande</DialogTitle>

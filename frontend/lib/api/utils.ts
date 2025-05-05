@@ -11,11 +11,17 @@ export const getStatusLabel = (status: StatutCommande): string => {
   return statusMap[status] || status;
 };
 
+/**
+ * Formate un montant en devise (FCFA)
+ * @param amount - Montant à formater
+ * @returns Chaîne formatée
+ */
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "XOF",
-  }).format(amount);
+  // Utiliser l'API Intl.NumberFormat pour formater correctement les montants
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'decimal', // Utiliser 'decimal' au lieu de 'currency' pour éviter le symbole €
+    maximumFractionDigits: 0,
+  }).format(amount) + ' FCFA';
 };
 
 export const formatFileSize = (bytes: number): string => {

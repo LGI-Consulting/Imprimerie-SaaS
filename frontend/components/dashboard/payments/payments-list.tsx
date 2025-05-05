@@ -7,29 +7,102 @@ import { Paiement, PaiementsFilter, MethodePaiement, StatutPaiement, Facture } f
 import { paiements } from "@/lib/api/paiements"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Download, Eye } from "lucide-react"
+import { Download, Eye, FileText, RefreshCw, Loader2 } from "lucide-react"
 import { ViewPaymentDialog } from "./view-payment-dialog"
-import { DownloadPDFButton } from "@/components/ui/download-pdf-button"
-import { useToast } from "@/components/ui/use-toast"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { addDays } from "date-fns"
+import { addDays, isWithinInterval } from "date-fns"
 import { DateRange } from "react-day-picker"
+import { generateAndDownloadReceiptPDF } from "@/lib/pdf/generate-payment-pdf"
+import { toast } from "sonner"
+
+type MethodePaiementFilter = MethodePaiement | "all"
 
 interface PaymentWithFacture extends Paiement {
   facture: Facture;
 }
 
 export function PaymentsList() {
-  const [payments, setPayments] = React.useState<PaymentWithFacture[]>([])
+  const [allPayments, setAllPayments] = React.useState<PaymentWithFacture[]>([])
+  const [filteredPayments, setFilteredPayments] = React.useState<PaymentWithFacture[]>([])
   const [loading, setLoading] = React.useState(true)
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(10)
-  const [total, setTotal] = React.useState(0)
   const [selectedPayment, setSelectedPayment] = React.useState<PaymentWithFacture | null>(null)
-  const [filters, setFilters] = React.useState<PaiementsFilter>({})
-  const { toast } = useToast()
+  const [filters, setFilters] = React.useState<Omit<PaiementsFilter, 'methode'> & { methode?: MethodePaiementFilter }>({})
+
+  // Fonction pour appliquer les filtres localement
+  const applyFilters = React.useCallback(() => {
+    let result = [...allPayments]
+
+    // Filtre par méthode
+    if (filters.methode && filters.methode !== "all") {
+      result = result.filter(payment => payment.methode === filters.methode as MethodePaiement)
+    }
+
+    // Filtre par date
+    if (filters.dateDebut || filters.dateFin) {
+      result = result.filter(payment => {
+        const paymentDate = new Date(payment.date_paiement)
+        const start = filters.dateDebut ? new Date(filters.dateDebut) : new Date(0)
+        const end = filters.dateFin ? new Date(filters.dateFin) : new Date()
+        return isWithinInterval(paymentDate, { start, end })
+      })
+    }
+
+    // Filtre par montant
+    if (filters.montantMin !== undefined || filters.montantMax !== undefined) {
+      result = result.filter(payment => {
+        const amount = Number(payment.montant)
+        const min = filters.montantMin !== undefined ? filters.montantMin : -Infinity
+        const max = filters.montantMax !== undefined ? filters.montantMax : Infinity
+        return amount >= min && amount <= max
+      })
+    }
+
+    setFilteredPayments(result)
+  }, [allPayments, filters])
+
+  // Effet pour appliquer les filtres quand ils changent
+  React.useEffect(() => {
+    applyFilters()
+  }, [filters, applyFilters])
+
+  const fetchPayments = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      // Récupérer les paiements
+      const response = await paiements.getPaginated(1, 1000);
+      const paymentsData = response.payments;
+
+      // Récupérer toutes les factures
+      const factures = await paiements.getAllFactures();
+
+      // Associer les factures aux paiements et ne garder que ceux qui ont une facture
+      const paymentsWithFactures = paymentsData
+        .map(payment => {
+          const facture = factures.find(f => f.paiement_id === payment.paiement_id);
+          if (facture) {
+            return {
+              ...payment,
+              facture
+            } as PaymentWithFacture;
+          }
+          return null;
+        })
+        .filter((payment): payment is PaymentWithFacture => payment !== null);
+
+      setAllPayments(paymentsWithFactures);
+      setFilteredPayments(paymentsWithFactures);
+    } catch (error) {
+      toast.error("Impossible de charger les paiements. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchPayments()
+  }, [fetchPayments])
 
   const columns: ColumnDef<PaymentWithFacture>[] = [
     {
@@ -78,58 +151,54 @@ export function PaymentsList() {
     },
     {
       id: "actions",
+      header: "Actions",
       cell: ({ row }) => {
         const payment = row.original
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-3">
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={() => setSelectedPayment(payment)}
+              className="flex items-center gap-2"
             >
               <Eye className="h-4 w-4" />
+              <span>Voir</span>
             </Button>
-            <DownloadPDFButton
-              paiement={payment}
-              facture={payment.facture}
+            <Button
               variant="ghost"
-              size="icon"
-            />
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={async (e) => {
+                e.stopPropagation();
+                console.log("Bouton cliqué");
+                console.log("Payment:", payment);
+                console.log("Facture:", payment.facture);
+                
+                if (!payment.facture) {
+                  console.log("Pas de facture trouvée");
+                  toast.error("Aucune facture associée à ce paiement");
+                  return;
+                }
+                try {
+                  console.log("Début de la génération du PDF");
+                  await generateAndDownloadReceiptPDF(payment, payment.facture);
+                  console.log("PDF généré avec succès");
+                  toast.success("Le reçu a été généré avec succès");
+                } catch (error) {
+                  console.error("Erreur détaillée lors de la génération du reçu:", error);
+                  toast.error("Erreur lors de la génération du reçu");
+                }
+              }}
+            >
+              <FileText className="h-4 w-4" />
+              <span>Générer facture</span>
+            </Button>
           </div>
         )
       },
     },
   ]
-
-  const fetchPayments = React.useCallback(async () => {
-    try {
-      setLoading(true)
-      const adaptedFilters = {
-        status: filters.statut,
-        method: filters.methode,
-        startDate: filters.dateDebut,
-        endDate: filters.dateFin,
-        minAmount: filters.montantMin,
-        maxAmount: filters.montantMax,
-        search: filters.termeRecherche,
-      };
-      const response = await paiements.getPaginated(page, pageSize, adaptedFilters)
-      setPayments(response.payments as PaymentWithFacture[])
-      setTotal(response.total)
-    } catch (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les paiements. Veuillez réessayer.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [page, pageSize, filters, toast])
-
-  React.useEffect(() => {
-    fetchPayments()
-  }, [fetchPayments])
 
   const getMethodColor = (method: MethodePaiement) => {
     switch (method.toLowerCase()) {
@@ -167,38 +236,21 @@ export function PaymentsList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Select
-          value={filters.statut}
-          onValueChange={(value) =>
-            setFilters((prev) => ({ ...prev, statut: value as StatutPaiement }))
-          }
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Statut" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="en_attente">En attente</SelectItem>
-            <SelectItem value="validé">Validé</SelectItem>
-            <SelectItem value="échoué">Échoué</SelectItem>
-          </SelectContent>
-        </Select>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Select
           value={filters.methode}
-          onValueChange={(value) =>
-            setFilters((prev) => ({ ...prev, methode: value as MethodePaiement }))
+          onValueChange={(value: MethodePaiementFilter) =>
+            setFilters((prev) => ({ ...prev, methode: value }))
           }
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Méthode" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes les méthodes</SelectItem>
             <SelectItem value="espèces">Espèces</SelectItem>
-            <SelectItem value="flooz">Flooz</SelectItem>
-            <SelectItem value="mixx">Mixx</SelectItem>
+            <SelectItem value="Flooz">Flooz</SelectItem>
+            <SelectItem value="Mixx">Mixx</SelectItem>
           </SelectContent>
         </Select>
 
@@ -212,9 +264,10 @@ export function PaymentsList() {
               : null
           }
           onChange={handleDateRangeChange}
+          className="w-full"
         />
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full">
           <Input
             type="number"
             placeholder="Min"
@@ -225,7 +278,7 @@ export function PaymentsList() {
                 montantMin: e.target.value ? Number(e.target.value) : undefined,
               }))
             }
-            className="w-[120px]"
+            className="w-full"
           />
           <Input
             type="number"
@@ -237,16 +290,29 @@ export function PaymentsList() {
                 montantMax: e.target.value ? Number(e.target.value) : undefined,
               }))
             }
-            className="w-[120px]"
+            className="w-full"
           />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchPayments}
+            className="h-10 w-10"
+            disabled={loading}
+            title="Actualiser la liste"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
 
       <DataTable
         columns={columns}
-        data={payments}
+        data={filteredPayments}
         filterColumn="paiement_id"
-        onRowClick={(row) => setSelectedPayment(row)}
       />
 
       {selectedPayment && (

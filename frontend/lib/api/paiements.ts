@@ -9,12 +9,13 @@ import type {
 
 // Types pour les requêtes
 export interface PaiementCreate {
-  amount: number;
-  client_id: number;
-  payment_method: MethodePaiement;
+  montant: number;
+  commande_id: number;
+  methode: MethodePaiement;
   description?: string;
   montant_recu: number;
   monnaie_rendue: number;
+  employe_id: number;
 }
 
 export interface PaiementUpdate {
@@ -83,21 +84,28 @@ export interface PaiementsPaginatedResponse {
   };
 }
 
+export interface CommandePaymentDetails {
+  montant_total: string;
+  montant_paye: string;
+  reste_a_payer: string;
+  situation_paiement: string;
+}
+
 // Fonctions pour les paiements
 export const paiements = {
   getAll: async (): Promise<Paiement[]> => {
     const response = await api.get<PaiementsResponse>("/paiements");
-    return response.data;
+    return response.data.data;
   },
 
   getById: async (
     id: number
   ): Promise<{ payment: Paiement; facture?: Facture }> => {
     const response = await api.get<PaiementResponse>(`/paiements/${id}`);
-    if (!response.data) {
+    if (!response.data?.data) {
       throw new Error("Paiement non trouvé");
     }
-    return response.data;
+    return response.data.data;
   },
 
   getByCommandeId: async (commande_id: number): Promise<Paiement[]> => {
@@ -116,22 +124,32 @@ export const paiements = {
     }
   },
 
+  getCommandePaymentDetails: async (commande_id: number): Promise<CommandePaymentDetails> => {
+    const response = await api.get<{ success: boolean; data: CommandePaymentDetails }>(
+      `/paiements/commande/${commande_id}/details`
+    );
+    if (!response.data.success) {
+      throw new Error("Impossible de récupérer les détails de paiement de la commande");
+    }
+    return response.data.data;
+  },
+
   create: async (
     data: PaiementCreate
-  ): Promise<{ payment: Paiement; facture?: Facture | undefined }> => {
+  ): Promise<{ payment: Paiement; facture?: Facture }> => {
     const response = await api.post<PaiementResponse>("/paiements", data);
-    if (!response.data) {
+    if (!response.data?.data) {
       throw new Error("Erreur lors de la création du paiement");
     }
-    return response.data;
+    return response.data.data;
   },
 
   update: async (id: number, data: PaiementUpdate): Promise<Paiement> => {
     const response = await api.put<PaiementResponse>(`/paiements/${id}`, data);
-    if (!response.data) {
+    if (!response.data?.data?.payment) {
       throw new Error("Erreur lors de la mise à jour du paiement");
     }
-    return response.data;
+    return response.data.data.payment;
   },
 
   delete: async (id: number): Promise<void> => {
@@ -141,17 +159,17 @@ export const paiements = {
   // Fonctions pour les factures
   getAllFactures: async (): Promise<Facture[]> => {
     const response = await api.get<FacturesResponse>("/paiements/facture");
-    return response.data;
+    return response.data.data;
   },
 
   getFactureById: async (
     id: number
   ): Promise<{ facture: Facture; payment?: Paiement }> => {
     const response = await api.get<FactureResponse>(`/paiements/facture/${id}`);
-    if (!response.data) {
+    if (!response.data?.data) {
       throw new Error("Facture non trouvée");
     }
-    return response.data;
+    return response.data.data;
   },
 
   updateFacture: async (id: number, data: FactureUpdate): Promise<Facture> => {
@@ -159,10 +177,10 @@ export const paiements = {
       `/paiements/facture/${id}`,
       data
     );
-    if (!response.data) {
+    if (!response.data?.data?.facture) {
       throw new Error("Erreur lors de la mise à jour de la facture");
     }
-    return response.data;
+    return response.data.data.facture;
   },
 
   deleteFacture: async (id: number): Promise<void> => {

@@ -1,122 +1,100 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ReceiptData } from './types';
 import { paiements } from '../api/paiements';
 
-// Styles pour le PDF
+// Styles pour le ticket de caisse
 const styles = StyleSheet.create({
   page: {
-    padding: 30,
+    padding: 10,
     fontFamily: 'Helvetica',
+    fontSize: 8,
+    width: '80mm', // Largeur standard pour ticket de caisse
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  logo: {
-    width: 150,
-    height: 50,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    alignItems: 'center',
     marginBottom: 10,
   },
-  invoiceNumber: {
+  title: {
     fontSize: 12,
-    marginBottom: 5,
-  },
-  date: {
-    fontSize: 12,
-    marginBottom: 20,
-  },
-  section: {
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 5,
+    textAlign: 'center',
+  },
+  companyName: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginBottom: 3,
+    textAlign: 'center',
+  },
+  invoiceNumber: {
+    fontSize: 8,
+    marginBottom: 3,
+    textAlign: 'center',
+  },
+  date: {
+    fontSize: 8,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  divider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
+    borderBottomStyle: 'dashed',
+    marginVertical: 5,
+  },
+  section: {
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    marginBottom: 3,
   },
   row: {
     flexDirection: 'row',
-    marginBottom: 5,
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   label: {
-    width: '30%',
-    fontSize: 10,
+    fontSize: 8,
   },
   value: {
-    width: '70%',
-    fontSize: 10,
-  },
-  table: {
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
-    paddingBottom: 5,
-    marginBottom: 5,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    marginBottom: 5,
-  },
-  col1: { width: '40%' },
-  col2: { width: '20%' },
-  col3: { width: '20%' },
-  col4: { width: '20%' },
-  amounts: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 5,
-  },
-  total: {
-    fontSize: 14,
+    fontSize: 8,
     fontWeight: 'bold',
-    marginTop: 10,
   },
   footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
-    right: 30,
+    marginTop: 10,
+    fontSize: 7,
     textAlign: 'center',
-    fontSize: 10,
   },
+  thankyou: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 5,
+  }
 });
 
 const PaymentReceiptTemplate: React.FC<{ data: ReceiptData }> = ({ data }) => {
   const formatDate = (date: string) => {
-    return format(new Date(date), 'dd MMMM yyyy', { locale: fr });
-  };
-
-  const formatAmount = (amount: number) => {
-    return paiements.formatAmount(amount);
+    return format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: fr });
   };
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size={[226, 400]} style={styles.page}>
         {/* En-tête */}
         <View style={styles.header}>
-          <Image src="/logo.png" style={styles.logo} />
-          <View>
-            <Text style={styles.title}>REÇU DE PAIEMENT</Text>
-            <Text style={styles.invoiceNumber}>N° {data.numero_facture}</Text>
-            <Text style={styles.date}>Date: {formatDate(data.date_emission)}</Text>
-          </View>
+          <Text style={styles.companyName}>IMPRIMERIE SAAS</Text>
+          <Text style={styles.title}>TICKET DE CAISSE</Text>
+          <Text style={styles.invoiceNumber}>N° {data.numero_facture}</Text>
+          <Text style={styles.date}>Le {formatDate(data.date_emission)}</Text>
         </View>
+
+        <View style={styles.divider} />
 
         {/* Informations client */}
         <View style={styles.section}>
@@ -126,76 +104,57 @@ const PaymentReceiptTemplate: React.FC<{ data: ReceiptData }> = ({ data }) => {
             <Text style={styles.value}>{data.client.nom} {data.client.prenom}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Téléphone:</Text>
+            <Text style={styles.label}>Tél:</Text>
             <Text style={styles.value}>{data.client.telephone}</Text>
           </View>
         </View>
 
+        <View style={styles.divider} />
+
         {/* Détails de la commande */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DÉTAILS DE LA COMMANDE</Text>
-          <Text style={styles.value}>Commande N° {data.commande.numero}</Text>
-          
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={styles.col1}>Description</Text>
-              <Text style={styles.col2}>Dimensions</Text>
-              <Text style={styles.col3}>Quantité</Text>
-              <Text style={styles.col4}>Prix</Text>
-            </View>
-            {data.commande.details.map((detail, index) => (
-              <View key={index} style={styles.tableRow}>
-                <Text style={styles.col1}>{detail.description}</Text>
-                <Text style={styles.col2}>{detail.dimensions || '-'}</Text>
-                <Text style={styles.col3}>{detail.quantite}</Text>
-                <Text style={styles.col4}>{formatAmount(detail.prix_unitaire)}</Text>
-              </View>
-            ))}
+          <Text style={styles.sectionTitle}>COMMANDE</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>N° Commande:</Text>
+            <Text style={styles.value}>{data.commande.numero}</Text>
           </View>
         </View>
 
+        <View style={styles.divider} />
+
         {/* Détails du paiement */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DÉTAILS DU PAIEMENT</Text>
+          <Text style={styles.sectionTitle}>PAIEMENT</Text>
           <View style={styles.row}>
-            <Text style={styles.label}>Méthode:</Text>
-            <Text style={styles.value}>{paiements.getPaymentMethodLabel(data.paiement.methode)}</Text>
+            <Text style={styles.label}>Mode:</Text>
+            <Text style={styles.value}>{data.paiement.methode}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Montant reçu:</Text>
-            <Text style={styles.value}>{formatAmount(data.paiement.montant_recu)}</Text>
+            <Text style={styles.label}>Montant payé:</Text>
+            <Text style={styles.value}>{paiements.formatAmount(data.paiement.montant_recu)}</Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Monnaie rendue:</Text>
-            <Text style={styles.value}>{formatAmount(data.paiement.monnaie_rendue)}</Text>
-          </View>
+          {data.paiement.monnaie_rendue > 0 && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Monnaie rendue:</Text>
+              <Text style={styles.value}>{paiements.formatAmount(data.paiement.monnaie_rendue)}</Text>
+            </View>
+          )}
           {data.paiement.reference && (
             <View style={styles.row}>
-              <Text style={styles.label}>Référence:</Text>
+              <Text style={styles.label}>Réf. Transaction:</Text>
               <Text style={styles.value}>{data.paiement.reference}</Text>
             </View>
           )}
         </View>
 
-        {/* Montants */}
-        <View style={styles.amounts}>
-          <View style={styles.amountRow}>
-            <Text style={styles.label}>Sous-total:</Text>
-            <Text style={styles.value}>{formatAmount(data.montants.sous_total)}</Text>
-          </View>
-          <View style={styles.amountRow}>
-            <Text style={styles.label}>Remise:</Text>
-            <Text style={styles.value}>{formatAmount(data.montants.remise)}</Text>
-          </View>
-          <View style={styles.amountRow}>
-            <Text style={styles.total}>Total: {formatAmount(data.montants.total)}</Text>
-          </View>
-        </View>
+        <View style={styles.divider} />
 
         {/* Pied de page */}
         <View style={styles.footer}>
-          <Text>Merci de votre confiance!</Text>
-          <Text>Pour toute question, contactez-nous au +225 07 07 07 07 07</Text>
+          <Text style={styles.thankyou}>MERCI DE VOTRE CONFIANCE !</Text>
+          <Text>IMPRIMERIE SAAS</Text>
+          <Text>123 Rue de l'Impression</Text>
+          <Text>Tél: +225 07 07 07 07 07</Text>
         </View>
       </Page>
     </Document>

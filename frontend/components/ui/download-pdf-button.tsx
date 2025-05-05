@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button, ButtonProps } from "./button";
 import { useToast } from "./use-toast";
-import { generateAndDownloadPaymentPDF } from "@/lib/pdf/generate-payment-pdf";
+import { generateAndDownloadReceiptPDF } from "@/lib/pdf/generate-payment-pdf";
 import { Paiement, Facture } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export interface DownloadPDFButtonProps extends React.PropsWithChildren {
   paiement: Paiement;
-  facture: Facture;
+  facture?: Facture;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
   retryCount?: number;
@@ -45,16 +45,16 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
     const { toast } = useToast();
 
     const handleDownload = React.useCallback(async () => {
-      if (isLoading) return;
+      if (isLoading || !facture) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
-        await generateAndDownloadPaymentPDF(paiement, facture);
+        await generateAndDownloadReceiptPDF(paiement, facture);
         toast({
           title: "Succès",
-          description: "Le reçu de paiement a été téléchargé avec succès.",
+          description: "Le ticket de caisse a été téléchargé avec succès.",
         });
         onSuccess?.();
       } catch (err) {
@@ -66,7 +66,7 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
         if (retryAttempt < retryCount) {
           toast({
             title: "Erreur",
-            description: "Impossible de générer le PDF. Nouvelle tentative...",
+            description: "Impossible de générer le ticket. Nouvelle tentative...",
             variant: "destructive",
           });
           
@@ -77,7 +77,7 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
         } else {
           toast({
             title: "Erreur",
-            description: "Impossible de générer le PDF après plusieurs tentatives. Veuillez réessayer plus tard.",
+            description: "Impossible de générer le ticket après plusieurs tentatives. Veuillez réessayer plus tard.",
             variant: "destructive",
           });
         }
@@ -86,36 +86,22 @@ export const DownloadPDFButton = React.forwardRef<HTMLButtonElement, DownloadPDF
       }
     }, [paiement, facture, isLoading, retryAttempt, retryCount, retryDelay, toast, onSuccess, onError]);
 
-    // Réinitialiser le compteur de tentatives lorsque les props changent
-    React.useEffect(() => {
-      setRetryAttempt(0);
-      setError(null);
-    }, [paiement.paiement_id, facture.facture_id]);
-
     return (
       <Button
         ref={ref}
-        className={cn("relative", className)}
         variant={variant}
         size={size}
-        disabled={disabled || isLoading}
+        className={cn("gap-2", className)}
+        disabled={disabled || isLoading || !facture}
         onClick={handleDownload}
         {...props}
       >
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : error ? (
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <Download className="h-4 w-4 mr-2" />
+          <Download className="h-4 w-4" />
         )}
-        <span>
-          {isLoading
-            ? "Génération..."
-            : error
-            ? "Réessayer"
-            : children || "Télécharger le reçu"}
-        </span>
+        {children || "Télécharger le ticket"}
       </Button>
     );
   }

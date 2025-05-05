@@ -12,7 +12,6 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Receipt } from "lucide-react"
-import { DownloadPDFButton } from "@/components/ui/download-pdf-button"
 import { Paiement, Facture } from "@/lib/api/types"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -44,16 +43,10 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, facture }: View
             </div>
 
             {payment.methode === 'espèces' && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Montant reçu</span>
-                  <span className="font-medium">{paiements.formatAmount(payment.montant_recu)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monnaie rendue</span>
-                  <span className="font-medium">{paiements.formatAmount(payment.monnaie_rendue)}</span>
-                </div>
-              </>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Monnaie rendue</span>
+                <span className="font-medium">{paiements.formatAmount(payment.monnaie_rendue)}</span>
+              </div>
             )}
 
             <div className="flex justify-between">
@@ -68,12 +61,10 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, facture }: View
               </Badge>
             </div>
 
-            {payment.reference_transaction && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Référence</span>
-                <span className="font-medium">{payment.reference_transaction}</span>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Référence</span>
+              <span className="font-medium">{payment.reference_transaction || "Non spécifiée"}</span>
+            </div>
 
             <div className="flex justify-between">
               <span className="text-muted-foreground">Statut</span>
@@ -114,16 +105,6 @@ export function ViewPaymentDialog({ open, onOpenChange, payment, facture }: View
           >
             Fermer
           </Button>
-          
-          {facture && (
-            <DownloadPDFButton
-              paiement={payment}
-              facture={facture}
-              variant="default"
-            >
-              Télécharger le reçu
-            </DownloadPDFButton>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
