@@ -11,9 +11,9 @@ const materiaux = [
     prix_unitaire: 1600,
     unite_mesure: "m2",
     options_disponibles: {
-      Perforation: 0,
-      Œillets: "supplément selon nombre et espacement",
-      "Renfort des bords": "supplément",
+      "Perforation": 0,
+      "Œillets": 500, // Remplacé par un prix fixe au lieu de "supplément selon nombre et espacement"
+      "Renfort des bords": 300, // Remplacé par un prix fixe au lieu de "supplément"
     },
     largeurs: [65, 75, 85, 105, 125, 127, 130, 160, 180, 215, 255, 320],
   },
@@ -26,7 +26,7 @@ const materiaux = [
     options_disponibles: {
       "Découpe droite": 0,
       "Découpe à forme": 900,
-      "Pelliculage de protection": "supplément",
+      "Pelliculage de protection": 400, // Remplacé par un prix fixe au lieu de "supplément"
     },
     largeurs: [107, 127, 152],
   },
@@ -38,7 +38,7 @@ const materiaux = [
     unite_mesure: "m2",
     options_disponibles: {
       "Découpe droite": 0,
-      "Découpe à forme": "supplément",
+      "Découpe à forme": 1200, // Remplacé par un prix fixe au lieu de "supplément"
     },
     largeurs: [107, 127],
   },
@@ -50,7 +50,7 @@ const materiaux = [
     unite_mesure: "m2",
     options_disponibles: {
       "Découpe droite": 0,
-      Plastification: "supplément",
+      "Plastification": 350, // Remplacé par un prix fixe au lieu de "supplément"
     },
     largeurs: [107, 127],
   },
@@ -62,7 +62,7 @@ const materiaux = [
     unite_mesure: "m2",
     options_disponibles: {
       "Découpe aux dimensions": 0,
-      "Traitement anti-UV": "supplément",
+      "Traitement anti-UV": 600, // Remplacé par un prix fixe au lieu de "supplément"
     },
     largeurs: [107, 127],
   },
@@ -73,6 +73,13 @@ const insertMateriau = async (materiau) => {
 
   try {
     await client.query("BEGIN");
+
+    // Normaliser les options pour s'assurer qu'elles sont toutes des nombres
+    const normalizedOptions = {};
+    for (const [key, value] of Object.entries(materiau.options_disponibles)) {
+      // Convertir toutes les valeurs en nombres
+      normalizedOptions[key] = typeof value === 'number' ? value : 0;
+    }
 
     // Insérer le matériau
     const insertMateriauQuery = `
@@ -92,7 +99,7 @@ const insertMateriau = async (materiau) => {
       materiau.description,
       materiau.prix_unitaire,
       materiau.unite_mesure,
-      materiau.options_disponibles,
+      normalizedOptions, // Utiliser les options normalisées
     ]);
 
     const newMateriau = materiauResult.rows[0];

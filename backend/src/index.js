@@ -19,6 +19,7 @@ import materiauRoutes from './routes/materiau.routes.js';
 import paiementRoutes from './routes/paiement.routes.js';
 import employeRoutes from './routes/employe.routes.js';
 import remiseRoutes from './routes/remise.routes.js';
+import filesRoutes from './routes/files.routes.js';
 //import { swaggerUi, specs } from './config/swagger.js';
 
 /**
@@ -28,12 +29,29 @@ const paiementRoutes = require('./routes/paiement.routes');
 const app = express();
 const PORT = process.env.PORT;
 
+// Configuration CORS plus permissive pour les ressources statiques
+const corsOptions = {
+  origin: 'http://localhost:3000', // Votre frontend
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Appliquer CORS
+app.use(cors(corsOptions));
+
+// Pour les routes de fichiers spécifiquement, permettre l'accès aux ressources
+app.use('/api/files/:fileId/preview', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+
 // Middlewares
 app.use(cookieParser());
 app.use(helmet()); // Sécurité
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
-app.use(express.json()); // Parsing du JSON
-app.use(express.urlencoded({ extended: true })); // Parsing des URL encodées
+app.use(express.json({ limit: '10gb' })); // Parsing du JSON
+app.use(express.urlencoded({ extended: true, limit: '10gb' })); // Parsing des URL encodées
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -43,7 +61,7 @@ app.use('/api/materiaux', materiauRoutes);
 app.use('/api/paiements', paiementRoutes);
 app.use('/api/employe', employeRoutes);
 app.use('/api/remises', remiseRoutes);
-
+app.use('/api/files', filesRoutes);
 // Route de base
 
 // Middleware de gestion d'erreurs
@@ -61,6 +79,9 @@ app.get('/', (req, res) => {
 });
 
 // Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`Serveur en cours d'exécution sur le port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Serveur démarré sur le port ${PORT}`);
 });
+
+// Augmenter le timeout à 30 minutes (1800000 ms)
+server.timeout = 1800000;

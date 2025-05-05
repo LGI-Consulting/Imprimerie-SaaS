@@ -49,7 +49,9 @@ import { formatCurrency } from "@/lib/api/utils"
 import { Commande, StatutCommande, Client, DetailCommande, Remise, TypeRemise } from "@/lib/api/types"
 import { ViewOrderDialog } from "./view-order-dialog"
 import { AddOrderDialog } from "./add-order-dialog"
+import { EditOrderDialog } from "./edit-order-dialog"
 import { useNotificationStore } from "@/lib/store/notifications"
+import { PrintFile } from "@/lib/api/types"
 
 interface OrdersListProps {
   userRole?: string
@@ -60,13 +62,19 @@ interface OrdersListProps {
 // Définir une interface pour la commande avec détails
 interface CommandeWithDetails extends Omit<Commande, 'remise'> {
   client: Client;
-  details: DetailCommande[];
+  details: (DetailCommande & { 
+    materiau?: { 
+      materiau_id: number; 
+      type_materiau: string;
+    } 
+  })[];
   remise?: {
     type: TypeRemise;
     valeur: number;
     code?: string;
     montant_applique: number;
   };
+  files?: PrintFile[];
 }
 
 const ITEMS_PER_PAGE = 10
@@ -91,47 +99,68 @@ export function OrdersList({
   const [selectedOrder, setSelectedOrder] = useState<CommandeWithDetails | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [orderToEdit, setOrderToEdit] = useState<CommandeWithDetails | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [filters, setFilters] = useState<CommandeFilters>({
     startDate: undefined,
     endDate: undefined,
     statut: userRole === "graphiste" ? "payée" : undefined,
-    client_id: undefined,
+    client_nom: undefined, // Ajouter client_nom au lieu de client_id,  // Ajouter client_nom au lieu de client_id
     materiau_id: undefined,
     sortBy: "date_creation",
-    sortOrder: "desc",
-    code_remise: undefined
+    sortOrder: "desc"
+    // Retirer // Retirer 
   })
 
   // Charger les commandes
   const loadOrders = useCallback(async () => {
     setLoading(true)
     try {
-      // Convertir les filtres étendus en filtres standard pour l'API
-      const apiFilters: CommandeFilters = {
-        ...filters,
-        // Exclure code_remise des filtres envoyés à l'API
-        code_remise: undefined
-      }
-      
+      // Récupérer toutes les commandes sans filtres
       const response = await commandes.getAll()
-      let commandesData = response as unknown as (Commande & { client: Client })[]
+      // Corriger le typage ici
+      let commandesData = response as unknown as any[]
+      
+      // Transformer les données pour le composant avec le bon typage
+      const transformedOrders = commandesData.map(cmd => ({
+        ...cmd,
+        commande_id: cmd.commande_id,
+        client: {
+          nom: cmd.client_nom || "Inconnu",
+          prenom: cmd.client_prenom || "",
+          telephone: cmd.telephone || "",
+          email: cmd.email || undefined,
+          adresse: cmd.adresse || undefined
+        },
+        details: (cmd as any).details || [], // Utiliser les détails s'ils existent déjà avec assertion de type
+      }))
+      
+      // Appliquer tous les filtres côté client
+      let filteredData = transformedOrders
       
       // Si l'utilisateur est un graphiste, filtrer pour n'afficher que les commandes payées
       if (userRole === "graphiste") {
-        commandesData = commandesData.filter(cmd => cmd.statut === "payée")
+        filteredData = filteredData.filter(cmd => cmd.statut === "payée")
       }
       
-      // Filtrer par code de remise côté client si nécessaire
-      let filteredData = commandesData
+      // Filtrer par statut si spécifié
+      if (filters.statut) {
+        filteredData = filteredData.filter(cmd => cmd.statut === filters.statut)
+      }
       
+      // Filtrer par nom ou prénom du client si spécifié
+      if (filters.client_nom) {
+        const searchTerm = filters.client_nom.toLowerCase()
+        filteredData = filteredData.filter(cmd => 
+          (cmd.client.nom && cmd.client.nom.toLowerCase().includes(searchTerm)) || 
+          (cmd.client.prenom && cmd.client.prenom.toLowerCase().includes(searchTerm))
+        )
+      }
       
-      filteredData && setOrders(filteredData.map(cmd => ({
-        ...cmd,
-        details: [], // Les détails seront chargés lors de l'ouverture du dialog
-      })))
-      filteredData && setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
+      setOrders(filteredData)
+      setTotalPages(Math.ceil(filteredData.length / ITEMS_PER_PAGE))
     } catch (err) {
       console.error("Erreur lors du chargement des commandes:", err)
       setError("Impossible de charger les commandes")
@@ -139,7 +168,7 @@ export function OrdersList({
     } finally {
       setLoading(false)
     }
-  }, [filters, userRole])
+  }, [filters.statut, filters.client_nom, userRole])
 
   useEffect(() => {
     loadOrders()
@@ -162,13 +191,61 @@ export function OrdersList({
   }
 
   // Gérer les actions
-  const handleViewOrder = (order: CommandeWithDetails) => {
-    setSelectedOrder(order)
-    setViewDialogOpen(true)
+  const handleViewOrder = async (order: CommandeWithDetails) => {
+    try {
+      // Toujours récupérer les détails complets pour avoir les fichiers
+      const fullOrder = await commandes.getById(order.commande_id)
+      if (fullOrder) {
+        // Mettre à jour l'ordre avec les détails complets et les fichiers
+        const updatedOrder = {
+          ...order,
+          details: fullOrder.details || [],
+          files: fullOrder.files || [] // Ajouter les fichiers
+        }
+        setSelectedOrder(updatedOrder)
+        
+        // Mettre à jour l'ordre dans la liste
+        setOrders(prev => 
+          prev.map(o => o.commande_id === order.commande_id ? updatedOrder : o)
+        )
+      } else {
+        setSelectedOrder(order)
+      }
+      
+      setViewDialogOpen(true)
+    } catch (error) {
+      console.error("Erreur lors de la récupération des détails de la commande:", error)
+      toast.error("Erreur lors de la récupération des détails de la commande")
+    }
   }
 
-  const handleEditOrder = (order: CommandeWithDetails) => {
-    router.push(`/dashboard/orders/${order.commande_id}/edit`)
+  const handleEditOrder = async (order: CommandeWithDetails) => {
+    try {
+      // Si les détails ne sont pas déjà chargés, les récupérer
+      if (!order.details || order.details.length === 0) {
+        const fullOrder = await commandes.getById(order.commande_id)
+        if (fullOrder) {
+          // Mettre à jour l'ordre avec les détails complets
+          const updatedOrder = {
+            ...order,
+            details: fullOrder.details || [],
+            files: fullOrder.files || []
+          }
+          setOrderToEdit(updatedOrder)
+        } else {
+          setOrderToEdit(order)
+        }
+      } else {
+        setOrderToEdit(order)
+      }
+      setEditDialogOpen(true)
+    } catch (err) {
+      console.error("Erreur lors du chargement des détails:", err)
+      toast.error("Erreur lors du chargement des détails de la commande")
+      // Ouvrir quand même le dialogue avec les données disponibles
+      setOrderToEdit(order)
+      setEditDialogOpen(true)
+    }
   }
 
   const handleDeleteOrder = async (order: CommandeWithDetails) => {
@@ -230,8 +307,6 @@ export function OrdersList({
       await commandes.updateStatus(order.commande_id, "en_impression");
       toast.success("Impression lancée avec succès");
       
-     
-      
       if (onStatusChange) {
         onStatusChange(order.commande_id, "en_impression");
       }
@@ -247,8 +322,6 @@ export function OrdersList({
     try {
       await commandes.updateStatus(order.commande_id, "terminée");
       toast.success("Commande marquée comme terminée");
-      
-      
       
       if (onStatusChange) {
         onStatusChange(order.commande_id, "terminée");
@@ -268,6 +341,11 @@ export function OrdersList({
         label: "Voir",
         icon: Eye,
         onClick: () => handleViewOrder(order)
+      },
+      {
+        label: "Modifier",
+        icon: Edit2,
+        onClick: () => handleEditOrder(order)
       }
     ];
   
@@ -289,13 +367,9 @@ export function OrdersList({
     }
   
     // Les admins et l'accueil peuvent modifier
-    if (userRole === "admin" || userRole === "accueil") {
-      actions.push({
-        label: "Modifier",
-        icon: Edit2,
-        onClick: () => handleEditOrder(order)
-      });
-    }
+    // if (userRole === "admin" || userRole === "accueil") {
+    //   actions.push();
+    // }
   
     // Seuls les admins peuvent supprimer
     if (userRole === "admin") {
@@ -351,6 +425,13 @@ export function OrdersList({
     }
   }
 
+  const handleOrderUpdate = (updatedOrder: Commande | undefined) => {
+    if (updatedOrder) {
+      toast.success("Commande mise à jour avec succès")
+      loadOrders()
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtres - Masquer complètement pour les graphistes */}
@@ -358,15 +439,15 @@ export function OrdersList({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 items-center gap-2">
             <Input
-              placeholder="ID Client"
-              type="number"
-              value={filters.client_id || ""}
-              onChange={(e) => handleFilterChange("client_id", e.target.value ? Number(e.target.value) : undefined)}
+              placeholder="Rechercher client..."
+              type="text"
+              value={filters.client_nom || ""}
+              onChange={(e) => handleFilterChange("client_nom", e.target.value || undefined)}
               className="max-w-sm"
             />
             <Select
               value={filters.statut || ""}
-              onValueChange={(value) => handleFilterChange("statut", value || undefined)}
+              onValueChange={(value) => handleFilterChange("statut", value === "all" ? undefined : value)}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Statut" />
@@ -380,18 +461,7 @@ export function OrdersList({
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              placeholder="Code de remise"
-              value={filters.code_remise || ""}
-              onChange={(e) => handleFilterChange("code_remise", e.target.value || undefined)}
-              className="max-w-sm"
-            />
           </div>
-          {(userRole === "admin" || userRole === "accueil") && (
-            <Button onClick={() => setAddDialogOpen(true)}>
-              Nouvelle commande
-            </Button>
-          )}
         </div>
       )}
 
@@ -404,6 +474,7 @@ export function OrdersList({
               <TableHead>Client</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Statut</TableHead>
+              <TableHead>Paiement</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -442,13 +513,25 @@ export function OrdersList({
               orders.map((order) => (
                 <TableRow key={order.commande_id}>
                   <TableCell>{order.numero_commande}</TableCell>
-                  <TableCell>{clients.getFullName(order.client)}</TableCell>
+                  <TableCell>
+                    {`${order.client.prenom} ${order.client.nom}`}
+                    {order.client.telephone && (
+                      <div className="text-xs text-muted-foreground">{order.client.telephone}</div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {format(new Date(order.date_creation), "dd MMMM yyyy", { locale: fr })}
                   </TableCell>
                   <TableCell>{renderStatus(order.statut)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {order.situation_paiement === "comptant" ? "Comptant" : "Crédit"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(order.details[0].sous_total)}
+                    {order.details && order.details.length > 0 
+                      ? formatCurrency(order.details.reduce((sum, detail) => sum + detail.sous_total, 0))
+                      : "N/A"}
                   </TableCell>
                   <TableCell>
                     {renderActions(order)}
@@ -518,6 +601,36 @@ export function OrdersList({
           onOpenChange={setViewDialogOpen}
         />
       )}
+      
+      {orderToEdit && (
+        <EditOrderDialog
+          order={{
+            ...orderToEdit,
+            client: {
+              client_id: orderToEdit.client_id || 0,
+              nom: orderToEdit.client.nom,
+              prenom: orderToEdit.client.prenom,
+              email: orderToEdit.client.email,
+              telephone: orderToEdit.client.telephone,
+              adresse: orderToEdit.client.adresse,
+              // Ajouter les propriétés manquantes avec des valeurs par défaut
+              dette: 0,
+              depot: 0,
+              date_creation: new Date().toISOString(),
+              derniere_visite: new Date().toISOString()
+            } as Client, // Assertion de type pour s'assurer que TypeScript reconnaît cet objet comme un Client
+            details: orderToEdit.details.map(detail => ({
+              ...detail,
+              materiau: detail.materiau || { materiau_id: detail.materiau_id, type_materiau: "" }
+            })) as any,
+            files: orderToEdit.files || []
+          }}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSuccess={handleOrderUpdate}
+        />
+      )}
+      
       <AddOrderDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}

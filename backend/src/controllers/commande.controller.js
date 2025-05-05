@@ -1,4 +1,6 @@
 import pool from "../config/db.js";
+import path from 'path';
+import fs from 'fs';
 
 // Récupérer toutes les commandes
 export const getAllOrders = async (req, res) => {
@@ -45,11 +47,12 @@ export const getOrderById = async (req, res) => {
   try {
     const orderId = req.params.id;
 
+    // Requête principale pour obtenir les détails de la commande
     const query = `
         SELECT c.*, 
                cl.nom as client_nom, cl.prenom as client_prenom, cl.telephone, cl.email, cl.adresse,
                e.nom as modifier_nom, e.prenom as modifier_prenom,
-               dc.detail_id, dc.materiau_id, dc.travail_id, dc.quantite, dc.dimensions, dc.prix_unitaire, dc.sous_total,
+               dc.detail_id, dc.materiau_id, dc.quantite, dc.dimensions, dc.prix_unitaire, dc.sous_total, dc.commentaires,
                m.nom as materiau_nom
         FROM commandes c
         LEFT JOIN clients cl ON c.client_id = cl.client_id
@@ -64,6 +67,16 @@ export const getOrderById = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ message: "Commande non trouvée" });
     }
+
+    // Requête pour obtenir les fichiers associés à la commande
+    const filesQuery = `
+      SELECT * FROM print_files
+      WHERE commande_id = $1
+      ORDER BY date_upload DESC
+    `;
+    
+    const filesResult = await pool.query(filesQuery, [orderId]);
+    const files = filesResult.rows;
 
     const order = {
       commande_id: rows[0].commande_id,
@@ -81,6 +94,7 @@ export const getOrderById = async (req, res) => {
         adresse: rows[0].adresse,
       },
       details: [],
+      files: files // Ajouter les fichiers à la réponse
     };
 
     if (rows[0].employe_reception_id) {
@@ -104,12 +118,12 @@ export const getOrderById = async (req, res) => {
         detailsMap.set(row.detail_id, {
           detail_id: row.detail_id,
           materiau_id: row.materiau_id,
-          travail_id: row.travail_id,
           quantite: row.quantite,
           dimensions: row.dimensions,
           prix_unitaire: row.prix_unitaire,
           sous_total: row.sous_total,
           materiau_nom: row.materiau_nom,
+          commentaires: row.commentaires
         });
       }
     });
@@ -226,18 +240,47 @@ export const createOrder = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const {
+    // Extraction des données avec parsing si nécessaire
+    let {
       clientInfo,
       materialType,
       width,
       length,
-      quantity = 1,
+      quantity,
       options,
-      calculatedPrice, // Données précalculées du frontend
-      orderNumber, // Numéro de commande généré par le frontend
-      est_commande_speciale, // Utiliser la valeur de la case à cocher
+      calculatedPrice,
+      orderNumber,
+      isDG,
+      situationPaiement,
     } = req.body;
-    console.log(calculatedPrice)
+
+    // S'assurer que les données sont correctement parsées
+    clientInfo =
+      typeof clientInfo === "string" ? JSON.parse(clientInfo) : clientInfo;
+    options = typeof options === "string" ? JSON.parse(options) : options || {};
+    calculatedPrice =
+      typeof calculatedPrice === "string"
+        ? JSON.parse(calculatedPrice)
+        : calculatedPrice;
+    console.log(situationPaiement);
+
+    // Conversion des types
+    width = Number(width);
+    length = Number(length);
+    quantity = Number(quantity);
+    const est_commande_speciale = isDG === "true" || isDG === true;
+
+    console.log("Données parsées:", {
+      clientInfo,
+      materialType,
+      width,
+      length,
+      quantity,
+      calculatedPrice,
+      est_commande_speciale,
+      situationPaiement,
+    });
+
     const employeId = req.user.employe_id;
 
     // Validation minimale des données
@@ -245,9 +288,21 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Informations manquantes" });
     }
 
-    // Gestion du client (création ou mise à jour)
-    let clientId = clientInfo.client_id;
-    if (!clientId) {
+    // Gestion du client (vérification et mise à jour)
+    let clientId;
+    const clientCheck = await client.query(
+      `SELECT client_id FROM clients WHERE nom = $1 AND prenom = $2`,
+      [clientInfo.nom, clientInfo.prenom]
+    );
+    if (clientCheck.rows.length > 0) {
+      clientId = clientCheck.rows[0].client_id;
+      // Mise à jour de la dernière visite
+      await client.query(
+        `UPDATE clients SET derniere_visite = NOW() WHERE client_id = $1`,
+        [clientId]
+      );
+    } else {
+      // Création d'un nouveau client
       const clientRes = await client.query(
         `INSERT INTO clients (nom, prenom, telephone, email, adresse) 
          VALUES ($1, $2, $3, $4, $5) RETURNING client_id`,
@@ -260,33 +315,41 @@ export const createOrder = async (req, res) => {
         ]
       );
       clientId = clientRes.rows[0].client_id;
-    } else {
-      await client.query(
-        `UPDATE clients SET derniere_visite = NOW() WHERE client_id = $1`,
-        [clientId]
-      );
     }
-
-    // La vérification du stock est maintenant entièrement gérée côté frontend
-    // Nous faisons confiance aux données envoyées par le frontend
 
     // Création de la commande avec le numéro généré par le frontend
     const orderRes = await client.query(
       `INSERT INTO commandes (
-    client_id, numero_commande, statut, situation_paiement,
-    employe_reception_id, est_commande_speciale, commentaires
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING commande_id`,
+        client_id, numero_commande, statut, situation_paiement,
+        employe_reception_id, est_commande_speciale, commentaires
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING commande_id`,
       [
         clientId,
         orderNumber,
         "reçue",
-        est_commande_speciale ? "comptant" : "credit",
+        situationPaiement, // Utiliser la valeur fournie par l'utilisateur
         employeId,
         est_commande_speciale,
-        options?.comments || null,
+        options.comments || null,
       ]
     );
     const commandeId = orderRes.rows[0].commande_id;
+
+    // Préparation des dimensions comme objet JSON (pour JSONB)
+    const dimensions = {
+      largeur_demandee: width,
+      longueur: length,
+      largeur_materiau: calculatedPrice.selectedWidth,
+      largeur_calcul: calculatedPrice.selectedWidth - 5,
+      surface_unitaire: calculatedPrice.area / quantity,
+      nombre_exemplaires: quantity,
+    };
+
+    // Préparation des options comme objet JSON
+    const commentairesJSON = {
+      options: calculatedPrice.optionsDetails || [],
+      commentaires: options.comments || "",
+    };
 
     // Création du détail de commande avec les prix précalculés
     await client.query(
@@ -297,21 +360,11 @@ export const createOrder = async (req, res) => {
       [
         commandeId,
         calculatedPrice.materiau_id,
-        calculatedPrice.area,
-        JSON.stringify({
-          largeur_demandee: width,
-          longueur: length,
-          largeur_materiau: calculatedPrice.selectedWidth,
-          largeur_calcul: calculatedPrice.selectedWidth - 5,
-          surface_unitaire: calculatedPrice.area / quantity,
-          nombre_exemplaires: quantity,
-        }),
+        quantity, // Utiliser quantity au lieu de calculatedPrice.area
+        dimensions, // Utiliser l'objet directement pour JSONB
         calculatedPrice.totalPrice / quantity, // Prix unitaire
         calculatedPrice.totalPrice, // Prix total
-        JSON.stringify({
-          options: calculatedPrice.optionsDetails,
-          commentaires: options?.comments,
-        }),
+        JSON.stringify(commentairesJSON),
       ]
     );
 
@@ -341,13 +394,13 @@ export const createOrder = async (req, res) => {
       VALUES ($1, 'creation_commande', $2, 'commandes', $3, $4)
     `;
     const detailsJson = JSON.stringify({
-      numero_commande: commandeId,
+      numero_commande: orderNumber,
       client_id: clientId,
-      statut: orderRes.rows[0].statut,
-      situation_paiement: orderRes.rows[0].situation_paiement,
-      est_commande_speciale: orderRes.rows[0].est_commande_speciale,
-      commentaires: options?.comments,
-      priorite: options?.priorite,
+      statut: "reçue",
+      situation_paiement: situationPaiement,
+      est_commande_speciale: est_commande_speciale,
+      commentaires: options.comments,
+      priorite: options.priorite,
     });
     await client.query(logQuery, [employeId, detailsJson, commandeId, null]);
 
@@ -603,5 +656,153 @@ export const deleteOrder = async (req, res) => {
     });
   } finally {
     client.release();
+  }
+};
+
+// Supprimer un fichier d'une commande
+export const deleteFile = async (req, res) => {
+  const { id, fileId } = req.params;
+  
+  try {
+    // 1. Vérifier si le fichier existe
+    const [fileResult] = await pool.query(
+      "SELECT * FROM print_files WHERE print_file_id = ? AND commande_id = ?",
+      [fileId, id]
+    );
+    
+    if (fileResult.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Fichier non trouvé ou n'appartient pas à cette commande" 
+      });
+    }
+    
+    const filePath = fileResult[0].file_path;
+    
+    // 2. Supprimer le fichier de la base de données
+    await pool.query(
+      "DELETE FROM print_files WHERE print_file_id = ?",
+      [fileId]
+    );
+    
+    // 3. Supprimer le fichier du système de fichiers
+    if (filePath) {
+      const fullPath = path.join(process.cwd(), filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    }
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Fichier supprimé avec succès" 
+    });
+  } catch (error) {
+    console.error("Erreur lors de la suppression du fichier:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Erreur lors de la suppression du fichier", 
+      error: error.message 
+    });
+  }
+};
+
+// Ajouter des fichiers à une commande existante
+export const uploadFiles = async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // 1. Vérifier si la commande existe
+    const [commandeResult] = await pool.query(
+      "SELECT * FROM commandes WHERE commande_id = ?",
+      [id]
+    );
+    
+    if (commandeResult.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Commande non trouvée" 
+      });
+    }
+    
+    // 2. Vérifier si des fichiers ont été téléchargés
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Aucun fichier n'a été téléchargé" 
+      });
+    }
+    
+    // 3. Enregistrer les fichiers dans la base de données
+    const filesData = [];
+    for (const file of req.files) {
+      const [result] = await pool.query(
+        "INSERT INTO print_files (commande_id, file_name, file_path, file_size, file_type) VALUES (?, ?, ?, ?, ?)",
+        [
+          id,
+          file.originalname,
+          file.path.replace(/\\/g, '/'),
+          file.size,
+          file.mimetype
+        ]
+      );
+      
+      filesData.push({
+        print_file_id: result.insertId,
+        commande_id: id,
+        file_name: file.originalname,
+        file_path: file.path.replace(/\\/g, '/'),
+        file_size: file.size,
+        file_type: file.mimetype
+      });
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      message: "Fichiers ajoutés avec succès", 
+      data: filesData 
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'ajout des fichiers:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Erreur lors de l'ajout des fichiers", 
+      error: error.message 
+    });
+  }
+};
+
+// Mettre à jour le statut d'une commande
+export const updateStatus = async (req, res) => {
+  const { id } = req.params;
+  const { statut } = req.body;
+  
+  try {
+    // Vérifier si le statut est valide
+    const statutsValides = ["reçue", "payée", "en_impression", "terminée", "livrée"];
+    if (!statutsValides.includes(statut)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Statut invalide" 
+      });
+    }
+    
+    // Mettre à jour le statut
+    await pool.query(
+      "UPDATE commandes SET statut = ? WHERE commande_id = ?",
+      [statut, id]
+    );
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Statut de la commande mis à jour avec succès" 
+    });
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour du statut:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Erreur lors de la mise à jour du statut", 
+      error: error.message 
+    });
   }
 };

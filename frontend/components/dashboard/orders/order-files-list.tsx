@@ -4,6 +4,10 @@ import { useState } from "react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Download, Eye, FileText, Image, File, Trash2 } from "lucide-react"
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// Configurer le worker PDF.js
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 import { Button } from "@/components/ui/button"
 import {
@@ -26,6 +30,7 @@ import { toast } from "sonner"
 
 import { PrintFile } from "@/lib/api/types"
 import { formatFileSize } from "@/lib/api/utils"
+import { Files } from "@/lib/api/files"
 
 interface OrderFilesListProps {
   files: PrintFile[]
@@ -33,7 +38,7 @@ interface OrderFilesListProps {
   onDelete?: (fileId: number) => void
 }
 
-export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesListProps) {
+export function OrderFilesList({ files: filesList, loading = false, onDelete }: OrderFilesListProps) {
   const [previewFile, setPreviewFile] = useState<PrintFile | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -67,14 +72,7 @@ export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesL
   const handleDownload = async (file: PrintFile) => {
     try {
       // Récupérer le fichier depuis l'API
-      const response = await fetch(`/api/files/${file.print_file_id}/download`)
-      
-      if (!response.ok) {
-        throw new Error("Erreur lors du téléchargement")
-      }
-      
-      // Créer un blob à partir de la réponse
-      const blob = await response.blob()
+      const blob = await Files.download(file.print_file_id)
       
       // Créer un lien de téléchargement
       const url = window.URL.createObjectURL(blob)
@@ -112,23 +110,27 @@ export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesL
     if (!previewFile) return null
 
     const mimeType = previewFile.mime_type || ""
+    const previewUrl = Files.getPreviewUrl(previewFile.print_file_id)
+    console.log(previewUrl)
     
     if (mimeType.startsWith("image/")) {
       return (
         <img 
-          src={`/api/files/${previewFile.print_file_id}/preview`} 
+          src={previewUrl} 
           alt={previewFile.file_name}
           className="max-h-[80vh] max-w-full object-contain"
         />
       )
     } else if (mimeType === "application/pdf") {
       return (
-        <iframe 
-          src={`/api/files/${previewFile.print_file_id}/preview`}
+        <Document
+          file={previewUrl}
+          options={{ withCredentials: true }}
           className="w-full h-[80vh]"
-          title={previewFile.file_name}
-        />
-      )
+        >
+          <Page pageNumber={1} width={600} />
+        </Document>
+      );
     } else {
       return (
         <div className="flex flex-col items-center justify-center p-8">
@@ -176,7 +178,7 @@ export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesL
                   <TableCell><Skeleton className="h-8 w-[100px] ml-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : files.length === 0 ? (
+            ) : filesList.length === 0 ? (
               // État vide
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
@@ -185,7 +187,7 @@ export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesL
               </TableRow>
             ) : (
               // Données
-              files.map((file) => (
+              filesList.map((file) => (
                 <TableRow key={file.print_file_id}>
                   <TableCell>
                     {getFileIcon(file.mime_type)}
@@ -245,7 +247,7 @@ export function OrderFilesList({ files, loading = false, onDelete }: OrderFilesL
 
       {/* Dialog de prévisualisation */}
       <Dialog open={previewOpen} onOpenChange={handleClosePreview}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {previewFile?.file_name}

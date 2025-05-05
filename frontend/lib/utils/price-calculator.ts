@@ -92,17 +92,23 @@ export const calculateOptionsPrice = (
     const opt = materialOptions[key];
     if (opt) {
       let cost = 0;
-      if (opt.type === "fixed") cost = opt.price || 0;
-      else if (opt.type === "per_sqm") cost = areaSqM * (opt.price || 0);
-      else if (opt.type === "per_unit" && val.quantity)
+      if (opt.type === "fixed") {
+        cost = opt.price || 0;
+      } else if (opt.type === "per_sqm") {
+        cost = areaSqM * (opt.price || 0);
+      } else if (opt.type === "per_unit" && val && typeof val === 'object' && 'quantity' in val) {
         cost = val.quantity * (opt.price || 0);
+      } else if (typeof opt.price === 'number') {
+        // Si le type n'est pas spécifié, on suppose que c'est par m²
+        cost = areaSqM * (opt.price || 0);
+      }
 
-      if (!opt.is_free) {
+      if (!opt.is_free && cost > 0) {
         const totalCost = cost * numExemplaires;
         additionalCosts += totalCost;
         optionsDetails.push({
-          option: key,
-          quantity: val.quantity || 1,
+          option: opt.name || key,
+          quantity: val && typeof val === 'object' && 'quantity' in val ? val.quantity : 1,
           unit_price: cost,
           total_price: totalCost,
         });
@@ -121,6 +127,22 @@ export const calculateOrderPrice = (
   options?: Record<string, any>,
   isSpecialOrder: boolean = false
 ): PriceCalculationResult => {
+  console.log("calculateOrderPrice - Entrée:", { 
+    material: { 
+      materiau_id: material.materiau_id, 
+      nom: material.nom, 
+      prix_unitaire: material.prix_unitaire 
+    }, 
+    stock: { 
+      largeur: stock.largeur, 
+      longeur_en_stock: stock.longeur_en_stock 
+    }, 
+    dimensions, 
+    quantity, 
+    options, 
+    isSpecialOrder 
+  });
+
   const requestedWidth = dimensions.largeur;
   const requestedLength = dimensions.longueur;
 
@@ -129,11 +151,23 @@ export const calculateOrderPrice = (
     stock.largeur,
   ]);
   const calculationWidth = selectedWidth - 5; // Applique la règle des -5cm
+  
+  console.log("calculateOrderPrice - Largeurs:", { 
+    requestedWidth, 
+    selectedWidth, 
+    calculationWidth 
+  });
 
   // Calculs prix et surface
   const areaSqM = (calculationWidth * requestedLength) / 10000;
   const totalAreaSqM = areaSqM * quantity;
   const materialLengthUsed = (requestedLength / 100) * quantity; // en mètres
+  
+  console.log("calculateOrderPrice - Calculs surface:", { 
+    areaSqM, 
+    totalAreaSqM, 
+    materialLengthUsed 
+  });
 
   // Vérification stock
   const stockCheck = verifyStockAvailability(
@@ -141,6 +175,9 @@ export const calculateOrderPrice = (
     quantity,
     stock.longeur_en_stock
   );
+  
+  console.log("calculateOrderPrice - Vérification stock:", stockCheck);
+  
   if (!stockCheck.available) {
     throw new Error(stockCheck.message);
   }
@@ -152,6 +189,11 @@ export const calculateOrderPrice = (
     material.prix_unitaire
   );
   const basePrice = unitPrice * quantity;
+  
+  console.log("calculateOrderPrice - Prix de base:", { 
+    unitPrice, 
+    basePrice 
+  });
 
   // Calcul des options
   const { totalCost: optionsCost, optionsDetails } = calculateOptionsPrice(
@@ -160,9 +202,21 @@ export const calculateOrderPrice = (
     areaSqM,
     quantity
   );
+  
+  console.log("calculateOrderPrice - Options:", { 
+    optionsCost, 
+    optionsDetails 
+  });
 
   // Calcul du prix total
   const totalPrice = isSpecialOrder ? 0 : basePrice + optionsCost;
+  
+  console.log("calculateOrderPrice - Prix total:", { 
+    basePrice, 
+    optionsCost, 
+    isSpecialOrder, 
+    totalPrice 
+  });
 
   return {
     totalPrice,

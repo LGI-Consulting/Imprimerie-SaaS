@@ -10,6 +10,9 @@ import {
   getOrdersByStatus,
   getOrderBySituationPaiement,
   getOrdersByMaterial,
+  deleteFile,
+  uploadFiles,
+  updateStatus
 } from "../controllers/commande.controller.js";
 import { verifyToken, checkRole } from "../middlewares/auth.middleware.js";
 import upload, { parseMultipartForm, handleMulterErrors } from "../middlewares/upload.middleware.js";
@@ -48,7 +51,7 @@ router.get("/:id", checkRole(["accueil", "admin"]), getOrderById);
 router.post(
   "/",
   checkRole(["accueil", "admin"]),
-  upload.array("files", 5),
+  upload.array("files", 100), // Augmenté à 100 fichiers
   parseMultipartForm,
   handleMulterErrors,
   createOrder
@@ -58,12 +61,34 @@ router.post(
 router.put(
   "/:id",
   checkRole(["accueil", "admin"]),
-  upload.array("files", 5),
+  upload.array("files", 100), // Augmenté à 100 fichiers
   parseMultipartForm,
   handleMulterErrors,
   updateOrder
 );
 
 router.delete("/:id", checkRole(["admin"]), deleteOrder);
+
+// Nouveaux endpoints pour la gestion des fichiers
+router.delete(
+  "/:id/files/:fileId",
+  checkRole(["accueil", "admin"]),
+  deleteFile
+);
+
+router.post(
+  "/:id/files",
+  checkRole(["accueil", "admin"]),
+  upload.array("files", 100), // Augmenté à 100 fichiers
+  handleMulterErrors,
+  uploadFiles
+);
+
+// Endpoint pour mettre à jour le statut d'une commande
+router.patch(
+  "/:id/status",
+  checkRole(["accueil", "admin", "graphiste"]),
+  updateStatus
+);
 
 export default router;

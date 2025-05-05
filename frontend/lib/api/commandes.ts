@@ -12,7 +12,6 @@ import type {
 } from "./types";
 import { remises } from "./remises";
 
-
 // Types pour les requêtes
 export interface CommandeCreate {
   clientInfo: {
@@ -29,7 +28,23 @@ export interface CommandeCreate {
   options?: {
     comments?: string;
     priorite?: string;
+    [key: string]: any;
   };
+  calculatedPrice: {
+    totalPrice?: number;
+    unitPrice?: number;
+    area?: number;
+    selectedWidth?: number;
+    materialLengthUsed?: number;
+    optionsCost?: number;
+    optionsDetails?: any[] | Record<string, any>; // Accepte à la fois un tableau ou un objet
+    basePrice?: number;
+    materiau_id?: number;
+    stock_id?: number;
+  };
+  orderNumber: string;
+  isDG: boolean;
+  situationPaiement: string;
 }
 
 export interface CommandeUpdate {
@@ -71,6 +86,7 @@ export interface CommandeFilters {
   statut?: StatutCommande;
   situation_paiement?: SituationPaiement;
   client_id?: number;
+  client_nom?: string;
   materiau_id?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
@@ -85,15 +101,15 @@ export const commandes = {
     const response = await api.get<CommandesResponse>("/commandes", {
       params: filters,
     });
-    return response.data.data;
+    return response.data;
   },
 
   getById: async (id: number): Promise<CommandeResponse["data"]> => {
     const response = await api.get<CommandeResponse>(`/commandes/${id}`);
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error("Commande non trouvée");
     }
-    return response.data.data;
+    return response.data;
   },
 
   getUnpaid: async (): Promise<Commande[]> => {
@@ -102,7 +118,10 @@ export const commandes = {
       const commands = await commandes.getByStatus("reçue");
       return commands;
     } catch (error) {
-      console.error("Erreur lors de la récupération des commandes non payées:", error);
+      console.error(
+        "Erreur lors de la récupération des commandes non payées:",
+        error
+      );
       return [];
     }
   },
@@ -111,14 +130,14 @@ export const commandes = {
     const response = await api.get<CommandesResponse>(
       `/commandes/client/${clientId}`
     );
-    return response.data.data;
+    return response.data;
   },
 
   getByStatus: async (status: StatutCommande): Promise<Commande[]> => {
     const response = await api.get<CommandesResponse>(
       `/commandes/status/${status}`
     );
-    return response.data.data;
+    return response.data;
   },
 
   getBySituationPaiement: async (
@@ -127,48 +146,46 @@ export const commandes = {
     const response = await api.get<CommandesResponse>(
       `/commandes/situation_paiement/${situationPaiement}`
     );
-    return response.data.data;
+    return response.data;
   },
 
   getByMaterial: async (materialType: string): Promise<Commande[]> => {
     const response = await api.get<CommandesResponse>(
       `/commandes/material/${materialType}`
     );
-    return response.data.data;
+    return response.data;
   },
 
   create: async (data: CommandeCreate, files?: File[]) => {
+    // Créer un FormData pour envoyer à la fois les données et les fichiers
     const formData = new FormData();
-    
-    // Ajouter les données de base
-    formData.append('clientInfo', JSON.stringify(data.clientInfo));
-    formData.append('materialType', data.materialType);
-    formData.append('width', data.width.toString());
-    formData.append('length', data.length.toString());
-    formData.append('quantity', data.quantity.toString());
-    
-    if (data.options) {
-      formData.append('options', JSON.stringify(data.options));
-    }
-    
+
+    // Ajouter chaque propriété individuellement
+    formData.append("clientInfo", JSON.stringify(data.clientInfo));
+    formData.append("materialType", data.materialType);
+    formData.append("width", data.width.toString());
+    formData.append("length", data.length.toString());
+    formData.append("quantity", data.quantity.toString());
+    formData.append("options", JSON.stringify(data.options));
+    formData.append("calculatedPrice", JSON.stringify(data.calculatedPrice));
+    formData.append("orderNumber", data.orderNumber);
+    formData.append("isDG", data.isDG.toString());
+    formData.append("situationPaiement", data.situationPaiement);
+
     // Ajouter les fichiers s'ils existent
     if (files && files.length > 0) {
       files.forEach((file) => {
-        formData.append('files', file);
+        formData.append("files", file);
       });
     }
 
-    const response = await api.post<CommandeResponse>('/commandes', formData, {
+    const response = await api.post<CommandeResponse>("/commandes", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
 
-    if (!response.data.data) {
-      throw new Error('Erreur lors de la création de la commande');
-    }
-
-    return response.data.data;
+    return response.data;
   },
 
   update: async (
@@ -227,10 +244,10 @@ export const commandes = {
       }
     );
 
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error("Erreur lors de la mise à jour de la commande");
     }
-    return response.data.data;
+    return response.data;
   },
 
   updateStatus: async (
@@ -244,17 +261,40 @@ export const commandes = {
       }
     );
 
-    if (!response.data.data) {
+    if (!response.data) {
       throw new Error(
         `Erreur lors de la mise à jour du statut de la commande vers "${newStatus}"`
       );
     }
-    return response.data.data;
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/commandes/${id}`);
   },
+
+  // Supprimer un fichier d'une commande
+  deleteFile: async (commandeId: number, fileId: number): Promise<void> => {
+    await api.delete(`/commandes/${commandeId}/files/${fileId}`);
+  },
+
+  // Uploader des fichiers pour une commande
+  uploadFiles: async (commandeId: number, files: File[]): Promise<any[]> => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append("files", file);
+    });
+
+    const response = await api.post(`/commandes/${commandeId}/files`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    return response.data;
+  },
+
+  
 
   // Fonctions utilitaires
   calculateTotal: (details: DetailCommande[]): number => {

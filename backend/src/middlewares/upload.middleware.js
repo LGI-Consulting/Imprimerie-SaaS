@@ -64,8 +64,10 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
-    files: 5 // Maximum 5 files
+    // Retirer complètement les limites de taille de fichier
+    // Note: La limite est maintenant définie par Node.js et le système
+    fileSize: Infinity,
+    files: 100 // Augmenter considérablement le nombre de fichiers
   }
 });
 
@@ -94,11 +96,8 @@ export const parseMultipartForm = (req, res, next) => {
 // Error handling middleware
 export const handleMulterErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'Fichier trop volumineux (max 10MB)' });
-    }
     if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({ message: 'Trop de fichiers (max 5)' });
+      return res.status(400).json({ message: 'Trop de fichiers (max 100)' });
     }
     return res.status(400).json({ message: err.message });
   }

@@ -18,10 +18,12 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Commande, TypeRemise, DetailCommande, PrintFile } from "@/lib/api/types"
+import { Commande, TypeRemise, DetailCommande, PrintFile, Materiau } from "@/lib/api/types"
 import { formatDate } from "@/lib/utils"
 import { formatCurrency } from "@/lib/api/utils"
 import { OrderFilesList } from "./order-files-list"
+import { useState, useEffect } from "react"
+import materiaux from "@/lib/api/materiaux"
 
 interface ViewOrderDialogProps {
   order: Commande & {
@@ -52,6 +54,30 @@ export function ViewOrderDialog({
   open,
   onOpenChange,
 }: ViewOrderDialogProps) {
+  const [materiauxList, setMateriauxList] = useState<Materiau[]>([])
+  
+  // Charger la liste des matériaux
+  useEffect(() => {
+    const loadMateriaux = async () => {
+      try {
+        const data = await materiaux.getAll()
+        setMateriauxList(data)
+      } catch (error) {
+        console.error('Erreur lors du chargement des matériaux:', error)
+      }
+    }
+    
+    if (open) {
+      loadMateriaux()
+    }
+  }, [open])
+  
+  // Fonction pour obtenir le nom du matériau à partir de son ID
+  const getMaterialName = (materiau_id: number) => {
+    const materiau = materiauxList.find(m => m.materiau_id === materiau_id)
+    return materiau ? materiau.type_materiau : `ID: ${materiau_id}`
+  }
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "reçue":
@@ -100,21 +126,75 @@ export function ViewOrderDialog({
 
   const getOptionsDetails = (detail: DetailCommande) => {
     try {
-      const options = JSON.parse(detail.commentaires || "{}")
-      return Object.entries(options).map(([key, value]: [string, any]) => ({
-        name: key,
-        quantity: value.quantity || 1,
-        unit_price: value.unit_price || 0,
-        total_price: value.total_price || 0
-      }))
-    } catch {
+      const parsedData = JSON.parse(detail.commentaires || "{}")
+      
+      // Vérifier si nous avons un tableau d'options dans la structure
+      if (parsedData.options && Array.isArray(parsedData.options)) {
+        return parsedData.options.map((option: any) => ({
+          name: option.option || option.name || option.label || "Option",
+          quantity: option.quantity || 1,
+          unit_price: option.unit_price || option.price || 0,
+          total_price: option.total_price || (option.quantity * option.unit_price) || 0
+        }))
+      }
+      
+      // Fallback pour l'ancien format (objet avec des clés)
+      return Object.entries(parsedData).filter(([key]) => key !== "commentaires").map(([key, value]: [string, any]) => {
+        if (typeof value === "object") {
+          return {
+            name: key,
+            quantity: value.quantity || 1,
+            unit_price: value.unit_price || 0,
+            total_price: value.total_price || 0
+          }
+        } else {
+          return {
+            name: key,
+            quantity: 1,
+            unit_price: 0,
+            total_price: 0
+          }
+        }
+      })
+    } catch (error) {
+      console.error("Erreur lors du parsing des options:", error)
       return []
     }
   }
 
+  const formatDimensions = (dimensions: any) => {
+    if (!dimensions) return "N/A";
+    if (typeof dimensions === "string") return dimensions;
+    
+    try {
+      // Si c'est un objet JSON stringifié
+      if (typeof dimensions === "string") {
+        dimensions = JSON.parse(dimensions);
+      }
+      
+      // Extraire les propriétés principales si elles existent
+      const { longueur, largeur_materiau, largeur_demandee } = dimensions;
+      
+      // Priorité: largeur_materiau > largeur_demandee
+      if (longueur && (largeur_materiau || largeur_demandee)) {
+        const largeur = largeur_materiau || largeur_demandee;
+        return `${longueur} × ${largeur} cm`;
+      }
+      
+      // Fallback: retourner une représentation formatée des dimensions disponibles
+      return Object.entries(dimensions)
+        .filter(([_, value]) => value !== null && value !== undefined)
+        .map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`)
+        .join(", ");
+    } catch (e) {
+      console.error("Erreur lors du formatage des dimensions:", e);
+      return "Format inconnu";
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Détails de la commande #{order.id}</DialogTitle>
         </DialogHeader>
@@ -132,18 +212,18 @@ export function ViewOrderDialog({
             <div>
               <h3 className="font-semibold">Informations de commande</h3>
               <p>Date: {formatDate(order.created_at)}</p>
-              <p>
+              <div className="flex items-center gap-1">
                 Statut:{" "}
                 <Badge className={getStatusColor(order.statut)}>
                   {order.statut}
                 </Badge>
-              </p>
-              <p>
+              </div>
+              <div className="flex items-center gap-1">
                 Mode de paiement:{" "}
                 <Badge variant="outline">
                   {order.situation_paiement === "comptant" ? "Comptant" : "Crédit"}
                 </Badge>
-              </p>
+              </div>
             </div>
           </div>
 
@@ -169,8 +249,8 @@ export function ViewOrderDialog({
               <TableBody>
                 {order.details.map((item, index) => (
                   <TableRow key={index}>
-                    <TableCell>{item.materiau_id}</TableCell>
-                    <TableCell>{item.dimensions}</TableCell>
+                    <TableCell>{getMaterialName(item.materiau_id)}</TableCell>
+                    <TableCell>{formatDimensions(item.dimensions)}</TableCell>
                     <TableCell>{item.quantite}</TableCell>
                     <TableCell>{formatCurrency(item.prix_unitaire)}</TableCell>
                     <TableCell>
@@ -267,4 +347,3 @@ export function ViewOrderDialog({
     </Dialog>
   )
 }
-

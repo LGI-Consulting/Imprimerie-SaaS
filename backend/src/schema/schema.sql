@@ -86,7 +86,7 @@ CREATE TABLE details_commande (
     commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
     materiau_id INTEGER REFERENCES materiaux(materiau_id),
     quantite DECIMAL(10, 2) NOT NULL,
-    dimensions VARCHAR(100),
+    dimensions JSONB, -- Changé de VARCHAR(100) à JSONB
     prix_unitaire DECIMAL(10, 2) NOT NULL,
     sous_total DECIMAL(10, 2) NOT NULL,
     commentaires TEXT

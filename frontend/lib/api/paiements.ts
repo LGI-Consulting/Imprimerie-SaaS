@@ -131,7 +131,7 @@ export const paiements = {
     if (!response.data) {
       throw new Error("Erreur lors de la mise à jour du paiement");
     }
-    return response.data.payment;
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
@@ -162,7 +162,7 @@ export const paiements = {
     if (!response.data) {
       throw new Error("Erreur lors de la mise à jour de la facture");
     }
-    return response.data.facture;
+    return response.data;
   },
 
   deleteFacture: async (id: number): Promise<void> => {

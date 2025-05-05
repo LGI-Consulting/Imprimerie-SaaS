@@ -119,17 +119,16 @@ export interface PrintFile {
   commande_id: number;
   file_name: string;
   file_path: string;
-  file_size: number | null;
-  mime_type: string | null;
-  description: string | null;
-  uploaded_by: number | null;
+  file_size: number;
+  mime_type: string;
   date_upload: string;
+  description?: string;
 }
 
 export interface DetailCommande {
   detail_id: number;
   commande_id: number;
-  materiau_id: number | null;
+  materiau_id: number;
   quantite: number;
   dimensions: string | null;
   prix_unitaire: number;
