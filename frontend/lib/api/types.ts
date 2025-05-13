@@ -148,6 +148,7 @@ export interface Paiement {
   date_paiement: string;
   statut: StatutPaiement;
   employe_id: number | null;
+  numero_commande?: string; // Ajout de cette propriété qui est renvoyée par le backend
 }
 
 export interface Facture {
@@ -273,4 +274,65 @@ export interface SurfaceCalculation {
   longueur: number;
   surfaceM2: number;
   valeur: number;
+}
+
+// Types pour la caisse
+export interface Caisse {
+  caisse_id: number;
+  numero_caisse: string;
+  employe_id: number;
+  solde_initial: number;
+  solde_actuel: number;
+  statut: 'ouverte' | 'fermée';
+  date_ouverture: string;
+  date_fermeture?: string;
+  derniere_operation: string;
+}
+
+export interface MouvementCaisse {
+  mouvement_id: number;
+  caisse_id: number;
+  type_mouvement: 'entrée' | 'sortie';
+  montant: number;
+  categorie: string;
+  description?: string;
+  date_mouvement: string;
+  employe_id: number;
+  reference_transaction?: string;
+  paiement_id?: number;
+  solde_avant: number;
+  solde_apres: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+}
+
+export interface CategorieDepense {
+  categorie_id: number;
+  nom: string;
+  description?: string;
+  type: 'caisse' | 'exploitant';
+  est_active: boolean;
+}
+
+// Types pour le compte exploitant
+export interface CompteExploitant {
+  compte_id: number;
+  solde: number;
+  date_creation: string;
+  date_modification: string;
+}
+
+export interface MouvementCompteExploitant {
+  mouvement_id: number;
+  type_mouvement: 'entrée' | 'sortie';
+  montant: number;
+  categorie: string;
+  description?: string;
+  date_mouvement: string;
+  employe_id: number;
+  reference_transaction?: string;
+  solde_avant: number;
+  solde_apres: number;
+  employe_nom?: string;
+  employe_prenom?: string;
 }

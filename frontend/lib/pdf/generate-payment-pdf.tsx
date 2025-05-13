@@ -48,6 +48,11 @@ export const generatePaymentPDF = async (
         monnaie_rendue: paiement.monnaie_rendue,
         reference: paiement.reference_transaction || undefined,
       },
+      montants: {
+        total: Number(facture.montant_total),
+        taxe: Number(facture.montant_taxe),
+        final: Number(facture.montant_final),
+      },
     };
 
     // Génération du PDF
@@ -140,19 +145,26 @@ export const generateReceiptPDF = async (
     const receiptData: ReceiptData = {
       numero_facture: facture.numero_facture,
       date_emission: facture.date_emission,
+      date_paiement: paiement.date_paiement,
       client: {
         nom: commandeDetails.client.nom,
         prenom: commandeDetails.client.prenom,
         telephone: commandeDetails.client.telephone,
       },
       commande: {
-        numero: commandeDetails.numero_commande,
+        numero: paiement.numero_commande || commandeDetails.numero_commande,
       },
       paiement: {
         methode: paiement.methode,
         montant_recu: paiement.montant_recu,
         monnaie_rendue: paiement.monnaie_rendue,
+        reste_a_payer: paiement.reste_a_payer,
         reference: paiement.reference_transaction || undefined,
+      },
+      montants: {
+        total: Number(facture.montant_total),
+        taxe: Number(facture.montant_taxe),
+        final: Number(facture.montant_final),
       },
     };
 

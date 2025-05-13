@@ -20,6 +20,12 @@ import paiementRoutes from './routes/paiement.routes.js';
 import employeRoutes from './routes/employe.routes.js';
 import remiseRoutes from './routes/remise.routes.js';
 import filesRoutes from './routes/files.routes.js';
+import caisseRoutes from './routes/caisse.routes.js';
+import compteExploitantRoutes from './routes/compteExploitant.routes.js';
+import categoriesDepensesRoutes from './routes/categoriesDepenses.routes.js';
+import rapportsDepensesRoutes from './routes/rapportsDepenses.routes.js';
+import rouleauRoutes from './routes/rouleau.routes.js';
+import utilisationRoutes from './routes/utilisation.routes.js';
 //import { swaggerUi, specs } from './config/swagger.js';
 
 /**
@@ -62,6 +68,12 @@ app.use('/api/paiements', paiementRoutes);
 app.use('/api/employe', employeRoutes);
 app.use('/api/remises', remiseRoutes);
 app.use('/api/files', filesRoutes);
+app.use('/api/caisse', caisseRoutes);
+app.use('/api/compte-exploitant', compteExploitantRoutes);
+app.use('/api/categories-depenses', categoriesDepensesRoutes);
+app.use('/api/rapports-depenses', rapportsDepensesRoutes);
+app.use('/api/rouleaux', rouleauRoutes);
+app.use('/api/utilisations', utilisationRoutes);
 // Route de base
 
 // Middleware de gestion d'erreurs

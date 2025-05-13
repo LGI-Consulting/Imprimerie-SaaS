@@ -4,10 +4,11 @@ import { Client } from '../api/types';
 export interface ReceiptData {
   numero_facture: string;
   date_emission: string;
+  date_paiement?: string;
   client: {
     nom: string;
     prenom: string;
-    telephone: string;
+    telephone?: string;
   };
   commande: {
     numero: string;
@@ -16,7 +17,13 @@ export interface ReceiptData {
     methode: string;
     montant_recu: number;
     monnaie_rendue: number;
+    reste_a_payer?: number;
     reference?: string;
+  };
+  montants: {
+    total: number;
+    taxe: number;
+    final: number;
   };
 }
 

@@ -31,19 +31,37 @@ CREATE TABLE materiaux (
     type_materiau VARCHAR(100) NOT NULL,
     nom VARCHAR(100),
     description TEXT,
-    prix_unitaire DECIMAL(10, 2) NOT NULL,
+    prix_achat DECIMAL(10, 2) NOT NULL, -- Prix d'achat par m²
+    prix_vente DECIMAL(10, 2) NOT NULL, -- Prix de vente par m²
     unite_mesure VARCHAR(20) NOT NULL,
     options_disponibles JSONB DEFAULT '{}',
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table Stocks par largeur
+-- Table Rouleaux
+CREATE TABLE rouleaux (
+    rouleau_id SERIAL PRIMARY KEY,
+    materiau_id INTEGER NOT NULL REFERENCES materiaux(materiau_id) ON DELETE CASCADE,
+    largeur DECIMAL(10, 2) NOT NULL,
+    longueur_initiale DECIMAL(10, 2) NOT NULL,
+    longueur_restante DECIMAL(10, 2) NOT NULL,
+    numero_rouleau VARCHAR(50) NOT NULL,
+    date_reception TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fournisseur VARCHAR(100),
+    prix_achat_total DECIMAL(10, 2) NOT NULL,
+    est_actif BOOLEAN DEFAULT TRUE,
+    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table Stocks par largeur (maintenant pour le suivi global)
 CREATE TABLE stocks_materiaux_largeur (
     stock_id SERIAL PRIMARY KEY,
     materiau_id INTEGER NOT NULL REFERENCES materiaux(materiau_id) ON DELETE CASCADE,
     largeur DECIMAL(10, 2) NOT NULL,
-    longeur_en_stock DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    longueur_totale DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    nombre_rouleaux INTEGER NOT NULL DEFAULT 0,
     seuil_alerte DECIMAL(10, 2) NOT NULL DEFAULT 0,
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -178,4 +196,17 @@ CREATE TABLE transactions_clients (
     employe_id INTEGER REFERENCES employes(employe_id),
     commentaire TEXT,
     reference_transaction VARCHAR(100)
+);
+
+-- Table Utilisations de matériaux
+CREATE TABLE utilisations_materiaux (
+    utilisation_id SERIAL PRIMARY KEY,
+    commande_id INTEGER NOT NULL REFERENCES commandes(commande_id) ON DELETE CASCADE,
+    rouleau_id INTEGER NOT NULL REFERENCES rouleaux(rouleau_id) ON DELETE CASCADE,
+    longueur_theorique DECIMAL(10, 2) NOT NULL,
+    longueur_reelle DECIMAL(10, 2) NOT NULL,
+    date_utilisation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    employe_id INTEGER REFERENCES employes(employe_id) ON DELETE SET NULL,
+    commentaires TEXT,
+    est_valide BOOLEAN DEFAULT FALSE
 );

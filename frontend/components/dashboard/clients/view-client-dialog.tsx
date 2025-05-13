@@ -33,8 +33,8 @@ interface ViewClientDialogProps {
     date_creation?: string
     derniere_visite?: string
     notes?: string
-    dette?: number
-    depot?: number
+    dette?: string
+    depot?: string
   }
 }
 
@@ -49,8 +49,17 @@ export function ViewClientDialog({ open, onOpenChange, client }: ViewClientDialo
       setLoading(true)
       
       // Récupérer les soldes à jour
-      const currentBalances = clients.getAccountBalance(client as Client)
-      setBalances(currentBalances)
+      const clientWithCorrectTypes = {
+        ...client,
+        dette: parseFloat(client.dette || '0'),
+        depot: parseFloat(client.depot || '0')
+      } as Client;
+
+      const currentBalances = clients.getAccountBalance(clientWithCorrectTypes)
+      setBalances({
+        dette: parseFloat(currentBalances.dette) || 0,
+        depot: parseFloat(currentBalances.depot) || 0
+      })
       
       // Récupérer les transactions
       clients.getTransactions(client.client_id)
@@ -273,7 +282,7 @@ export function ViewClientDialog({ open, onOpenChange, client }: ViewClientDialo
                                 {getTransactionLabel(transaction.type_transaction)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatAmount(transaction.montant)}
+                                {formatAmount(parseFloat(transaction.montant as string))}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -294,24 +303,62 @@ export function ViewClientDialog({ open, onOpenChange, client }: ViewClientDialo
             <div className="space-y-4">
               <Card>
                 <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Historique des transactions</CardTitle>
+                  <CardDescription>Liste des transactions effectuées par ce client</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex items-center justify-center h-32 text-muted-foreground">
+                      <p>Chargement des transactions...</p>
+                    </div>
+                  ) : transactions.length > 0 ? (
+                    <div className="max-h-[300px] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[120px]">Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Employé</TableHead>
+                            <TableHead className="text-right">Montant</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {transactions.map((transaction) => (
+                            <TableRow key={transaction.transaction_id}>
+                              <TableCell className="font-medium">
+                                {formatDate(transaction.date_transaction)}
+                              </TableCell>
+                              <TableCell className="flex items-center gap-2">
+                                {getTransactionIcon(transaction.type_transaction)}
+                                {getTransactionLabel(transaction.type_transaction)}
+                              </TableCell>
+                              <TableCell>
+                                {transaction.employe_prenom} {transaction.employe_nom}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatAmount(parseFloat(transaction.montant as string))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-32 text-muted-foreground">
+                      <p>Aucune transaction trouvée</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">Historique des commandes</CardTitle>
                   <CardDescription>Liste des commandes passées par ce client</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-center h-32 text-muted-foreground">
                     <p>Aucune commande trouvée</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Historique des paiements</CardTitle>
-                  <CardDescription>Liste des paiements effectués par ce client</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    <p>Aucun paiement trouvé</p>
                   </div>
                 </CardContent>
               </Card>

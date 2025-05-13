@@ -64,6 +64,7 @@ import {
   validateStock,
   findSuitableMaterialWidth,
 } from "@/lib/utils/stock-validator";
+import { generateAndPrintOrderPDF } from "@/lib/pdf/generate-order-pdf";
 
 // Définir l'interface OptionDetail si elle n'est pas importée
 interface OptionDetail {
@@ -735,6 +736,69 @@ export function AddOrderDialog({
     }
   };
 
+  const handleProforma = async () => {
+    try {
+      // Validation des données
+      const validationResult = validateOrder({
+        clientInfo: form.getValues().clientInfo,
+        width: form.getValues().dimensions.largeur,
+        length: form.getValues().dimensions.longueur,
+        quantity: form.getValues().quantite,
+        materialType: selectedMateriau?.type_materiau,
+        options: form.getValues().options,
+      });
+
+      if (!validationResult.valid) {
+        setError(validationResult.message || "Validation échouée");
+        return;
+      }
+
+      // Génération du numéro de commande temporaire
+      const orderNumber = `PRO-${Date.now().toString().slice(-6)}`;
+
+      // Préparation des données pour le PDF
+      const orderData = {
+        client: {
+          nom: form.getValues().clientInfo.nom,
+          prenom: form.getValues().clientInfo.prenom,
+          telephone: form.getValues().clientInfo.telephone,
+          email: form.getValues().clientInfo.email || "",
+          adresse: form.getValues().clientInfo.adresse || "",
+        },
+        numero_commande: orderNumber,
+        date_creation: new Date().toISOString(),
+        statut: "proforma",
+        situation_paiement: form.getValues().situation_paiement,
+        details: [{
+          materiau_id: selectedMateriau?.materiau_id || 0,
+          materiau: {
+            materiau_id: selectedMateriau?.materiau_id || 0,
+            type_materiau: selectedMateriau?.type_materiau || "",
+            nom: selectedMateriau?.nom || "",
+          },
+          dimensions: form.getValues().dimensions,
+          quantite: form.getValues().quantite,
+          prix_unitaire: priceCalculation?.unitPrice || 0,
+          options: Object.entries(form.getValues().options || {}).map(([key, value]) => ({
+            name: key,
+            quantity: 1,
+            unit_price: selectedMateriau?.options_disponibles?.[key] || 0,
+            total_price: selectedMateriau?.options_disponibles?.[key] || 0,
+          })),
+        }],
+        commentaires: form.getValues().commentaires,
+      };
+
+      // Génération et impression du PDF
+      await generateAndPrintOrderPDF(orderData as any, 'A4');
+      toast.success("Facture proforma générée avec succès");
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Erreur lors de la génération de la facture proforma:", err);
+      setError("Erreur lors de la génération de la facture proforma");
+    }
+  };
+
   useEffect(() => {
     console.log("useEffect - selectedOptions changed:", selectedOptions);
     // Forcer un recalcul lorsque les options changent
@@ -1317,6 +1381,14 @@ export function AddOrderDialog({
                 onClick={() => onOpenChange(false)}
               >
                 Annuler
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleProforma}
+                disabled={isSubmitting}
+              >
+                Générer Proforma
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Création..." : "Créer la commande"}

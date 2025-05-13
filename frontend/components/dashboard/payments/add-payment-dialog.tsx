@@ -1,6 +1,5 @@
-"use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -34,26 +33,25 @@ import { commandes } from "@/lib/api/commandes"
 import { Paiement, Facture, MethodePaiement, StatutPaiement, Commande, DetailCommande, Client } from "@/lib/api/types"
 import { generateAndDownloadPaymentPDF } from "@/lib/pdf/generate-payment-pdf"
 
-// Form schema corrigé avec les bonnes validations
-const formSchema = z
-  .object({
-    client_id: z.string({
-      required_error: "Veuillez sélectionner un client",
-    }),
-    commande_id: z.string({
-      required_error: "Veuillez sélectionner une commande",
-    }),
-    montant: z.number().min(0, "Le montant doit être un nombre positif"),
-    montant_recu: z.number().min(0, "Le montant reçu doit être un nombre positif"),
-    methode: z.enum(["espèces", "Flooz", "Mixx"], {
-      required_error: "Veuillez sélectionner un mode de paiement",
-    }),
-    description: z.string().optional(),
-    reference_transaction: z.string().optional(),
-    date_paiement: z.date({
-      required_error: "Veuillez sélectionner une date",
-    }),
-  });
+// Définir le schéma de validation en dehors du composant
+const formSchema = z.object({
+  client_id: z.string({
+    required_error: "Veuillez sélectionner un client",
+  }),
+  commande_id: z.string({
+    required_error: "Veuillez sélectionner une commande",
+  }),
+  montant: z.number().min(0, "Le montant doit être un nombre positif"),
+  montant_recu: z.number().min(0, "Le montant reçu doit être un nombre positif"),
+  methode: z.enum(["espèces", "Flooz", "Mixx"], {
+    required_error: "Veuillez sélectionner un mode de paiement",
+  }),
+  description: z.string().optional(),
+  reference_transaction: z.string().optional(),
+  date_paiement: z.date({
+    required_error: "Veuillez sélectionner une date",
+  }),
+});
 
 interface AddPaymentDialogProps {
   open: boolean
@@ -62,6 +60,8 @@ interface AddPaymentDialogProps {
 }
 
 export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymentDialogProps) {
+  console.log("AddPaymentDialog render started with open:", open);
+  
   // États essentiels
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [clientsList, setClientsList] = useState<Client[]>([]);
@@ -69,7 +69,6 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
   const [selectedOrder, setSelectedOrder] = useState<Commande | null>(null);
   const [unpaidOrders, setUnpaidOrders] = useState<Commande[]>([]);
   const [resteAPayer, setResteAPayer] = useState<number>(0);
-  const [montantAPayer, setMontantAPayer] = useState<number>(0);
   const [monnaieRendue, setMonnaieRendue] = useState<number>(0);
   const [resteAPayerApresPaiement, setResteAPayerApresPaiement] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -79,7 +78,9 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
   const [createdInvoice, setCreatedInvoice] = useState<Facture | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const isSubmitting = React.useRef(false);
 
+  // Important: Créer le formulaire en dehors de tout bloc conditionnel
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -93,16 +94,46 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
       date_paiement: new Date(),
     },
   });
+  
+  // Récupérer les valeurs du formulaire une seule fois par rendu à l'aide de useMemo
+  const montantAPayer = form.watch("montant");
+  const montantRecu = form.watch("montant_recu");
+  const methodePaiement = form.watch("methode");
+  
+  // Créer des variables dérivées avec useMemo pour éviter des calculs répétés
+  const calculatedMonnaieRendue = useMemo(() => {
+    const mPayer = Number(montantAPayer);
+    const mRecu = Number(montantRecu);
+    return mRecu > mPayer ? mRecu - mPayer : 0;
+  }, [montantAPayer, montantRecu]);
 
+  const calculatedResteAPayerApresPaiement = useMemo(() => {
+    if (!selectedOrder) return 0;
+    
+    const mPayer = Number(montantAPayer);
+    const mRecu = Number(montantRecu);
+    
+    if (selectedOrder.situation_paiement === "credit") {
+      return Math.max(0, resteAPayer - mRecu);
+    }
+    return 0;
+  }, [selectedOrder, montantAPayer, montantRecu, resteAPayer]);
+
+  // Mettre à jour les états dérivés une seule fois après les calculs
+  useEffect(() => {
+    setMonnaieRendue(calculatedMonnaieRendue);
+    setResteAPayerApresPaiement(calculatedResteAPayerApresPaiement);
+  }, [calculatedMonnaieRendue, calculatedResteAPayerApresPaiement]);
+  
   // Réinitialiser le formulaire à l'ouverture
   useEffect(() => {
     if (open) {
+      console.log("Dialog opened, resetting form");
       form.reset();
       setSelectedClient(null);
       setSelectedOrder(null);
       setUnpaidOrders([]);
       setResteAPayer(0);
-      setMontantAPayer(0);
       setMonnaieRendue(0);
       setResteAPayerApresPaiement(0);
       setPaymentSuccess(false);
@@ -175,6 +206,8 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
           if (paymentDetails && paymentDetails.reste_a_payer) {
             const resteAPayerNum = parseFloat(paymentDetails.reste_a_payer);
             setResteAPayer(resteAPayerNum);
+            
+            // Important: Utiliser batch setValue pour éviter les rendus multiples
             form.setValue("montant", resteAPayerNum);
             form.setValue("montant_recu", resteAPayerNum);
           } else {
@@ -197,42 +230,35 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
     calculateResteAPayer();
   }, [selectedOrder, form, toast]);
 
-  // Mettre à jour le reste à payer et la monnaie rendue
-  useEffect(() => {
-    const montantAPayer = Number(form.watch("montant"));
-    const montantRecu = Number(form.watch("montant_recu"));
-    
-    if (selectedOrder) {
-      // Pour le crédit
-      if (selectedOrder.situation_paiement === "credit") {
-        // Calculer le reste à payer après ce paiement
-        setResteAPayerApresPaiement(Math.max(0, montantAPayer - montantRecu));
-        // Calculer la monnaie à rendre si montant reçu > montant à payer
-        setMonnaieRendue(montantRecu > montantAPayer ? montantRecu - montantAPayer : 0);
-      } 
-      // Pour le comptant
-      else {
-        setResteAPayerApresPaiement(0); // Pas de reste à payer en comptant
-        setMonnaieRendue(montantRecu > montantAPayer ? montantRecu - montantAPayer : 0);
-      }
-    }
-  }, [form.watch("montant"), form.watch("montant_recu"), selectedOrder]);
-
   // Filtrer les clients en fonction de la recherche
-  const filteredClients = searchQuery.trim() === "" 
-    ? clientsList 
-    : clientsList.filter(client => 
-        `${client.nom} ${client.prenom} ${client.telephone}`
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase())
-      );
+  const filteredClients = useMemo(() => {
+    return searchQuery.trim() === "" 
+      ? clientsList 
+      : clientsList.filter(client => 
+          `${client.nom} ${client.prenom} ${client.telephone}`
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase())
+        );
+  }, [clientsList, searchQuery]);
 
   // Gérer la soumission du formulaire
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    console.log("Form submission started with data:", data);
+    
+    // Vérifier si une soumission est déjà en cours
+    if (isLoading || isSubmitting.current) {
+      console.log("Submission already in progress, ignoring");
+      return;
+    }
+    
     try {
+      // Verrouiller la soumission
+      isSubmitting.current = true;
+      setIsLoading(true);
+      
       const montantAPayer = Number(data.montant);
       const montantRecu = Number(data.montant_recu);
-
+      
       // Validation pour le paiement comptant
       if (selectedOrder?.situation_paiement === "comptant" && montantRecu < montantAPayer) {
         toast({
@@ -240,6 +266,8 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
           description: "Le montant reçu doit être supérieur ou égal au montant à payer pour une commande comptant",
           variant: "destructive",
         });
+        setIsLoading(false);
+        isSubmitting.current = false;
         return;
       }
 
@@ -249,10 +277,10 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
           description: "Impossible d'identifier l'employé",
           variant: "destructive",
         });
+        setIsLoading(false);
+        isSubmitting.current = false;
         return;
       }
-
-      setIsLoading(true);
 
       // Créer l'objet conforme à l'interface PaiementCreate
       const paymentData = {
@@ -263,15 +291,21 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
         monnaie_rendue: Math.max(0, montantRecu - montantAPayer),
         description: data.description || undefined,
         employe_id: user.id,
+        reference_transaction: data.reference_transaction || undefined
       };
-
+      
+      console.log("Sending payment data:", paymentData);
+      
       const result = await paiements.create(paymentData);
+      console.log("Payment created successfully:", result);
+      
       setCreatedPayment(result.payment);
       setCreatedInvoice(result.facture || null);
       setPaymentSuccess(true);
 
-      // Vérifier si le paiement est complet en utilisant les détails de paiement
+      // Vérifier si le paiement est complet
       const paymentDetails = await paiements.getCommandePaymentDetails(selectedOrder?.commande_id || 0);
+      
       if (paymentDetails && Number(paymentDetails.reste_a_payer) === 0 && selectedOrder) {
         try {
           await commandes.updateStatus(selectedOrder.commande_id, "payée");
@@ -289,58 +323,70 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
         }
       }
 
-      onAddPayment(result.payment, result.facture);
+      // Appeler la fonction de callback avec les données du paiement
+      if (onAddPayment) {
+        onAddPayment(result.payment, result.facture);
+      }
       
       toast({
         title: "Succès",
         description: "Le paiement a été enregistré avec succès",
       });
       
-      onOpenChange(false);
+      // Fermer le dialogue après un court délai
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
+      
     } catch (error) {
       console.error("Erreur lors de la création du paiement:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de créer le paiement",
+        description: error instanceof Error ? error.message : "Impossible de créer le paiement",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+      isSubmitting.current = false;
     }
-  };
-
-  // Afficher le montant restant à payer
-  const displayRemainingAmount = () => {
-    if (!selectedOrder) return null;
-    
-    return (
-      <div className="flex justify-between text-sm text-muted-foreground">
-        <span>Reste à payer:</span>
-        <span>{paiements.formatAmount(resteAPayer || 0)}</span>
-      </div>
-    );
   };
 
   // Fermer le dialogue et réinitialiser le formulaire
   const handleClose = () => {
-    onOpenChange(false)
-    form.reset()
-    setPaymentSuccess(false)
-    setCreatedPayment(null)
-    setCreatedInvoice(null)
-    setSelectedClient(null)
-    setSelectedOrder(null)
-  }
+    isSubmitting.current = false;
+    setIsLoading(false);
+    onOpenChange(false);
+    form.reset();
+    setPaymentSuccess(false);
+    setCreatedPayment(null);
+    setCreatedInvoice(null);
+    setSelectedClient(null);
+    setSelectedOrder(null);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      // Si on ferme le dialogue et qu'une soumission est en cours, ignorer
+      if (!newOpen && isSubmitting.current) {
+        console.log("Ignoring close request during submission");
+        return;
+      }
+      // Sinon, appeler la fonction de fermeture normale
+      handleClose();
+    }}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Nouveau paiement</DialogTitle>
+          <DialogTitle>Ajouter un paiement</DialogTitle>
+          <DialogDescription>
+            Enregistrez un nouveau paiement pour une commande client.
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit)} 
+            className="space-y-4"
+          >
             {/* Recherche de client */}
             <div className="space-y-2">
               <FormLabel>Rechercher un client</FormLabel>
@@ -373,7 +419,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                     <SelectTrigger>
                       <SelectValue placeholder="Sélectionner un client" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[40vh]">
                       {filteredClients.map((client) => (
                         <SelectItem key={client.client_id} value={client.client_id.toString()}>
                           {client.nom} {client.prenom} - {client.telephone}
@@ -386,14 +432,14 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
               )}
             />
 
-            {/* Détails du client sélectionné */}
+            {/* Détails du client sélectionné - Ajuster pour les petits écrans */}
             {selectedClient && (
-              <div className="rounded-md border p-3 bg-muted/30">
+              <div className="rounded-md border p-3 bg-muted/30 text-sm">
                 <h4 className="text-sm font-medium mb-1">Détails du client</h4>
                 <div className="text-sm text-muted-foreground">
-                  <p>Nom: {selectedClient.nom} {selectedClient.prenom}</p>
+                  <p className="break-words">Nom: {selectedClient.nom} {selectedClient.prenom}</p>
                   <p>Téléphone: {selectedClient.telephone}</p>
-                  {selectedClient.email && <p>Email: {selectedClient.email}</p>}
+                  {selectedClient.email && <p className="break-words">Email: {selectedClient.email}</p>}
                   {unpaidOrders.length > 0 ? (
                     <p className="text-amber-600 font-medium">{unpaidOrders.length} commande(s) non payée(s)</p>
                   ) : (
@@ -403,7 +449,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
               </div>
             )}
 
-            {/* Sélection de la commande (uniquement si un client est sélectionné) */}
+            {/* Sélection de la commande - Ajuster pour les petits écrans */}
             {selectedClient && unpaidOrders.length > 0 && (
               <FormField
                 control={form.control}
@@ -422,7 +468,7 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner une commande" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[40vh]">
                         {unpaidOrders.map((order) => (
                           <SelectItem key={order.commande_id} value={order.commande_id.toString()}>
                             {order.numero_commande} - {format(new Date(order.date_creation), 'dd/MM/yyyy')}
@@ -438,29 +484,30 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
 
             {selectedOrder && (
               <>
-                <div className="rounded-md border p-4 bg-muted/30">
+                {/* Détails de la commande - Améliorer pour les petits écrans */}
+                <div className="rounded-md border p-3 bg-muted/30 text-sm">
                   <h4 className="text-sm font-medium mb-2">Détails de la commande</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Numéro de commande</span>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex flex-wrap justify-between">
+                      <span className="text-muted-foreground">Numéro</span>
                       <span className="font-medium">{selectedOrder.numero_commande}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date de création</span>
+                    <div className="flex flex-wrap justify-between">
+                      <span className="text-muted-foreground">Date</span>
                       <span className="font-medium">
                         {format(new Date(selectedOrder.date_creation), 'dd/MM/yyyy')}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between">
                       <span className="text-muted-foreground">Montant total</span>
                       <span className="font-medium">{paiements.formatAmount(resteAPayer)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Reste à payer avant paiement</span>
+                    <div className="flex flex-wrap justify-between">
+                      <span className="text-muted-foreground">Reste à payer</span>
                       <span className="font-medium">{paiements.formatAmount(resteAPayer)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Mode de paiement</span>
+                    <div className="flex flex-wrap justify-between">
+                      <span className="text-muted-foreground">Mode</span>
                       <span className="font-medium capitalize">
                         {selectedOrder.situation_paiement === "credit" ? "Crédit" : "Comptant"}
                       </span>
@@ -468,113 +515,114 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
                   </div>
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="montant"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Montant à payer</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          disabled={true}
-                          value={field.value}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="methode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Méthode de paiement</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          form.setValue("montant_recu", form.watch("montant"));
-                          setMonnaieRendue(0);
-                        }}
-                        value={field.value}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choisir une méthode" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="espèces">Espèces</SelectItem>
-                          <SelectItem value="Flooz">Flooz</SelectItem>
-                          <SelectItem value="Mixx">Mixx</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="montant_recu"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Montant reçu</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          min={selectedOrder.situation_paiement === "comptant" ? resteAPayer : "0"}
-                          value={field.value}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
-                        />
-                      </FormControl>
-                      {selectedOrder.situation_paiement === "credit" && (
-                        <FormDescription>
-                          Reste à payer après ce paiement: {paiements.formatAmount(resteAPayerApresPaiement)}
-                        </FormDescription>
-                      )}
-                      {monnaieRendue > 0 && (
-                        <FormDescription>
-                          Monnaie à rendre: {paiements.formatAmount(monnaieRendue)}
-                        </FormDescription>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {(form.watch("methode") === "Flooz" || form.watch("methode") === "Mixx") && (
+                {/* Champs de formulaire - Adapter pour les petits écrans */}
+                <div className="grid grid-cols-1 gap-4">
                   <FormField
                     control={form.control}
-                    name="reference_transaction"
+                    name="montant"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Référence de transaction</FormLabel>
+                        <FormLabel>Montant à payer</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Entrez la référence de la transaction" />
+                          <Input
+                            type="number"
+                            disabled={true}
+                            value={field.value}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
+
+                  <FormField
+                    control={form.control}
+                    name="methode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Méthode de paiement</FormLabel>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                          }}
+                          value={field.value}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choisir une méthode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="espèces">Espèces</SelectItem>
+                            <SelectItem value="Flooz">Flooz</SelectItem>
+                            <SelectItem value="Mixx">Mixx</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="montant_recu"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Montant reçu</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={selectedOrder.situation_paiement === "comptant" ? resteAPayer : "0"}
+                            value={field.value}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        {selectedOrder.situation_paiement === "credit" && (
+                          <FormDescription className="text-xs">
+                            Reste à payer après: {paiements.formatAmount(resteAPayerApresPaiement)}
+                          </FormDescription>
+                        )}
+                        {monnaieRendue > 0 && (
+                          <FormDescription className="text-xs">
+                            Monnaie à rendre: {paiements.formatAmount(monnaieRendue)}
+                          </FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {(methodePaiement === "Flooz" || methodePaiement === "Mixx") && (
+                    <FormField
+                      control={form.control}
+                      name="reference_transaction"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Référence de transaction</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Entrez la référence de la transaction" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
               </>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row gap-2 mt-6">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleClose}
+                className="w-full sm:w-auto"
               >
                 Annuler
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading || !selectedOrder}
+                className="w-full sm:w-auto"
               >
                 {isLoading ? (
                   <>
@@ -590,5 +638,5 @@ export function AddPaymentDialog({ open, onOpenChange, onAddPayment }: AddPaymen
         </Form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

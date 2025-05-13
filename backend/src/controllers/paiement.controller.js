@@ -238,6 +238,15 @@ export const getAllPayments = async (req, res) => {
 export const getPaymentById = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Vérifier que l'ID est un nombre entier valide
+    const paymentId = parseInt(id, 10);
+    if (isNaN(paymentId)) {
+      return res.status(400).json({
+        success: false,
+        message: `ID de paiement invalide: ${id}`,
+      });
+    }
 
     const paymentResult = await pool.query(
       `
@@ -245,8 +254,8 @@ export const getPaymentById = async (req, res) => {
       FROM paiements p
       JOIN commandes c ON p.commande_id = c.commande_id
       WHERE p.paiement_id = $1
-    `,
-      [id]
+      `,
+      [paymentId]
     );
 
     if (paymentResult.rows.length === 0) {
@@ -258,9 +267,9 @@ export const getPaymentById = async (req, res) => {
 
     const factureResult = await pool.query(
       `
-      SELECT * FROM factures WHERE commande_id = $1
-    `,
-      [paymentResult.rows[0].commande_id]
+      SELECT * FROM factures WHERE paiement_id = $1
+      `,
+      [paymentResult.rows[0].paiement_id]
     );
 
     const facture = factureResult.rows[0] || null;
@@ -462,7 +471,8 @@ export const getAllFactures = async (req, res) => {
     const result = await pool.query(`
       SELECT f.*, c.numero_commande 
       FROM factures f
-      JOIN commandes c ON f.commande_id = c.commande_id
+      JOIN paiements p ON f.paiement_id = p.paiement_id
+      JOIN commandes c ON p.commande_id = c.commande_id
       ORDER BY f.date_emission DESC
     `);
 
@@ -490,7 +500,8 @@ export const getFactureById = async (req, res) => {
       `
       SELECT f.*, c.numero_commande 
       FROM factures f
-      JOIN commandes c ON f.commande_id = c.commande_id
+      JOIN paiements p ON f.paiement_id = p.paiement_id
+      JOIN commandes c ON p.commande_id = c.commande_id
       WHERE f.facture_id = $1
     `,
       [id]
@@ -504,8 +515,8 @@ export const getFactureById = async (req, res) => {
     }
 
     const paymentResult = await pool.query(
-      "SELECT * FROM paiements WHERE commande_id = $1",
-      [factureResult.rows[0].commande_id]
+      "SELECT * FROM paiements WHERE paiement_id = $1",
+      [factureResult.rows[0].paiement_id]
     );
 
     const payment = paymentResult.rows[0] || null;

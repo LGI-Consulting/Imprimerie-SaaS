@@ -1,0 +1,272 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/context/auth-context"
+import { useToast } from "@/components/ui/use-toast"
+
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { caisse } from "@/lib/api/caisse"
+import { CategorieDepense } from "@/lib/api/types"
+
+const formSchema = z.object({
+  type_mouvement: z.enum(["entrée", "sortie"], {
+    required_error: "Veuillez sélectionner un type de mouvement",
+  }),
+  montant: z.number().min(0.01, "Le montant doit être supérieur à 0"),
+  categorie: z.string({
+    required_error: "Veuillez sélectionner une catégorie",
+  }),
+  description: z.string().optional(),
+  reference_transaction: z.string().optional(),
+})
+
+interface AddMouvementDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  caisseId: number | null
+  onAddMouvement: () => void
+}
+
+export function AddMouvementDialog({
+  open,
+  onOpenChange,
+  caisseId,
+  onAddMouvement,
+}: AddMouvementDialogProps) {
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [categories, setCategories] = useState<CategorieDepense[]>([])
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      type_mouvement: "entrée",
+      montant: 0,
+      categorie: "",
+      description: "",
+      reference_transaction: "",
+    },
+  })
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const data = await caisse.getCategories()
+        setCategories(data)
+      } catch (error) {
+        console.error("Erreur lors du chargement des catégories:", error)
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les catégories",
+          variant: "destructive",
+        })
+      }
+    }
+
+    if (open) {
+      loadCategories()
+    }
+  }, [open, toast])
+
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (!caisseId || !user?.id) return
+
+    try {
+      setLoading(true)
+      await caisse.enregistrerMouvement({
+        caisse_id: caisseId,
+        employe_id: user.id,
+        ...data,
+      })
+
+      toast({
+        title: "Succès",
+        description: "Le mouvement a été enregistré avec succès",
+      })
+
+      onAddMouvement()
+      onOpenChange(false)
+      form.reset()
+    } catch (error) {
+      console.error("Erreur lors de l'enregistrement du mouvement:", error)
+      toast({
+        title: "Erreur",
+        description: "Impossible d'enregistrer le mouvement",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Nouveau Mouvement</DialogTitle>
+          <DialogDescription>
+            Enregistrez un nouveau mouvement de caisse
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="type_mouvement"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type de mouvement</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="entrée">Entrée</SelectItem>
+                      <SelectItem value="sortie">Sortie</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="montant"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Montant</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="categorie"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Catégorie</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une catégorie" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {categories.map((categorie) => (
+                        <SelectItem
+                          key={categorie.categorie_id}
+                          value={categorie.nom}
+                        >
+                          {categorie.nom}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="reference_transaction"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Référence transaction</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Annuler
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  "Enregistrer"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
+} 

@@ -9,8 +9,8 @@ export interface ClientCreate {
   email?: string | null;
   telephone: string;
   adresse?: string | null;
-  dette?: number;
-  depot?: number;
+  dette?: string;
+  depot?: string;
   notes?: string;
 }
 
@@ -41,13 +41,15 @@ export interface Transaction {
   transaction_id: number;
   client_id: number;
   type_transaction: "depot" | "retrait" | "imputation_dette" | "paiement_dette";
-  montant: number;
-  solde_avant: number;
-  solde_apres: number;
+  montant: string | number;
+  solde_avant: string | number;
+  solde_apres: string | number;
   date_transaction: string;
   employe_id: number;
   commentaire: string | null;
   reference_transaction: string | null;
+  employe_nom?: string;
+  employe_prenom?: string;
 }
 
 // Types pour les réponses d'erreur
@@ -195,10 +197,10 @@ export const clients = {
   },
 
   // Fonctions utilitaires pour les dépôts et dettes
-  getAccountBalance: (client: Client): { depot: number; dette: number } => {
+  getAccountBalance: (client: Client): { depot: string; dette: string } => {
     return {
-      depot: client.depot,
-      dette: client.dette,
+      depot: client.depot.toString(),
+      dette: client.dette.toString(),
     };
   },
 

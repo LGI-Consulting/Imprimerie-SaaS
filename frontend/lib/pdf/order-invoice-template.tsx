@@ -257,7 +257,9 @@ const OrderInvoiceTemplate = ({ data, format = 'A4' }: { data: OrderInvoiceData;
         </View>
 
         {/* Titre */}
-        <Text style={styles.title}>FACTURE N° {data.numero_commande}</Text>
+        <Text style={styles.title}>
+          {data.statut === "proforma" ? "FACTURE PROFORMA" : "FACTURE"} N° {data.numero_commande}
+        </Text>
 
         {/* Informations client et commande */}
         <View style={styles.row}>

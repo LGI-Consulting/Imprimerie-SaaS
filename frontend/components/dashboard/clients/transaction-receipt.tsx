@@ -119,8 +119,9 @@ export function TransactionReceipt({ transaction, client, onClose }: Transaction
 const ReceiptContent = forwardRef<HTMLDivElement, { transaction: Transaction; client: Client }>(
   ({ transaction, client }, ref) => {
     // Fonction pour formater un montant en FCFA
-    const formatAmount = (amount: number) => {
-      return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' FCFA'
+    const formatAmount = (amount: number | string) => {
+      const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+      return numericAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' FCFA'
     }
 
     // Fonction pour formater la date

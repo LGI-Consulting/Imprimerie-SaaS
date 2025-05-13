@@ -15,7 +15,6 @@ import {
   verifyToken, 
   checkRole,
 } from "../middlewares/auth.middleware.js"
-
 const router = express.Router();
 
 router.use(verifyToken);
@@ -23,15 +22,17 @@ router.use(verifyToken);
 // Route pour obtenir les détails de paiement d'une commande
 router.get('/commande/:commandeId/details', checkRole(["caisse", "admin"]), getCommandePaymentDetails);
 
-router.post('/',checkRole(["caisse", "admin"]), createPayment);
-router.get('/',checkRole(["caisse", "admin"]), getAllPayments);
-router.get('/:id',checkRole(["caisse", "admin"]), getPaymentById);
-router.put('/:id',checkRole(["caisse", "admin"]), updatePayment);
-router.delete('/:id',checkRole(["admin"]), deletePayment);
+// Routes pour les factures - définies AVANT les routes génériques
+router.get('/facture', checkRole(["caisse", "admin"]), getAllFactures);
+router.get('/facture/:id', checkRole(["caisse", "admin"]), getFactureById);
+router.put('/facture/:id', checkRole(["caisse", "admin"]), updateFacture);
+router.delete('/facture/:id', checkRole(["admin"]), deleteFacture);
 
-router.get('/facture',checkRole(["caisse", "admin"]), getAllFactures);
-router.get('/facture/:id',checkRole(["caisse", "admin"]), getFactureById);
-router.put('/facture/:id',checkRole(["caisse", "admin"]), updateFacture);
-router.delete('/facture/:id',checkRole(["admin"]), deleteFacture);
+// Routes pour les paiements - définies APRÈS les routes spécifiques
+router.post('/', checkRole(["caisse", "admin"]), createPayment);
+router.get('/', checkRole(["caisse", "admin"]), getAllPayments);
+router.get('/:id', checkRole(["caisse", "admin"]), getPaymentById);
+router.put('/:id', checkRole(["caisse", "admin"]), updatePayment);
+router.delete('/:id', checkRole(["admin"]), deletePayment);
 
 export default router;

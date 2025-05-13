@@ -76,6 +76,7 @@ export function PaymentsList() {
 
       // Récupérer toutes les factures
       const factures = await paiements.getAllFactures();
+      console.log("Factures:", factures);
 
       // Associer les factures aux paiements et ne garder que ceux qui ont une facture
       const paymentsWithFactures = paymentsData
@@ -171,28 +172,29 @@ export function PaymentsList() {
               className="flex items-center gap-2"
               onClick={async (e) => {
                 e.stopPropagation();
-                console.log("Bouton cliqué");
-                console.log("Payment:", payment);
-                console.log("Facture:", payment.facture);
                 
-                if (!payment.facture) {
-                  console.log("Pas de facture trouvée");
-                  toast.error("Aucune facture associée à ce paiement");
-                  return;
-                }
                 try {
-                  console.log("Début de la génération du PDF");
-                  await generateAndDownloadReceiptPDF(payment, payment.facture);
-                  console.log("PDF généré avec succès");
-                  toast.success("Le reçu a été généré avec succès");
+                  // Récupérer le paiement avec sa facture associée
+                  const paymentWithInvoice = await paiements.getById(payment.paiement_id);
+                  
+                  if (!paymentWithInvoice.facture) {
+                    toast.error("Aucune facture associée à ce paiement");
+                    return;
+                  }
+                  
+                  await generateAndDownloadReceiptPDF(
+                    paymentWithInvoice.payment, 
+                    paymentWithInvoice.facture
+                  );
+                  toast.success("Le ticket de caisse a été généré avec succès");
                 } catch (error) {
-                  console.error("Erreur détaillée lors de la génération du reçu:", error);
-                  toast.error("Erreur lors de la génération du reçu");
+                  console.error("Erreur lors de la génération du ticket de caisse:", error);
+                  toast.error("Erreur lors de la génération du ticket de caisse");
                 }
               }}
             >
               <FileText className="h-4 w-4" />
-              <span>Générer facture</span>
+              <span>Ticket de caisse</span>
             </Button>
           </div>
         )

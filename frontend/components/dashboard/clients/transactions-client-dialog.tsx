@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Wallet, ArrowUp, ArrowDown, AlertCircle, CreditCard, Loader2, X, Receipt } from "lucide-react"
+import { Wallet, ArrowUp, ArrowDown, AlertCircle, CreditCard, Loader2, Receipt } from "lucide-react"
+import { generateAndDownloadTransactionPDF } from "@/lib/pdf/generate-transaction-pdf"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -68,8 +69,6 @@ export function TransactionsClientDialog({
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(false)
   const [balances, setBalances] = useState({ dette: 0, depot: 0 })
-  const [showReceipt, setShowReceipt] = useState(false)
-  const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null)
   
   // Formulaire pour les transactions
   const form = useForm<z.infer<typeof transactionSchema>>({
@@ -96,7 +95,10 @@ export function TransactionsClientDialog({
       
       // Mettre à jour les soldes
       const currentBalances = clients.getAccountBalance(refreshedClient)
-      setBalances(currentBalances)
+      setBalances({
+        dette: parseFloat(currentBalances.dette) || 0,
+        depot: parseFloat(currentBalances.depot) || 0
+      })
       
       // Récupérer les transactions
       const transactionsList = await clients.getTransactions(client.client_id)
@@ -123,8 +125,14 @@ export function TransactionsClientDialog({
       toast.success("Dépôt ajouté avec succès")
       form.reset()
       loadClientData()
-      setCurrentTransaction(transaction)
-      setShowReceipt(true)
+      
+      // Générer et télécharger le reçu PDF
+      try {
+        await generateAndDownloadTransactionPDF(transaction, client)
+      } catch (pdfError) {
+        console.error("Erreur lors de la génération du reçu:", pdfError)
+        toast.error("Erreur lors de la génération du reçu")
+      }
       
       if (onTransactionSuccess) {
         onTransactionSuccess()
@@ -152,8 +160,14 @@ export function TransactionsClientDialog({
       toast.success("Retrait effectué avec succès")
       form.reset()
       loadClientData()
-      setCurrentTransaction(transaction)
-      setShowReceipt(true)
+      
+      // Générer et télécharger le reçu PDF
+      try {
+        await generateAndDownloadTransactionPDF(transaction, client)
+      } catch (pdfError) {
+        console.error("Erreur lors de la génération du reçu:", pdfError)
+        toast.error("Erreur lors de la génération du reçu")
+      }
       
       if (onTransactionSuccess) {
         onTransactionSuccess()
@@ -181,8 +195,14 @@ export function TransactionsClientDialog({
       toast.success("Dette imputée avec succès")
       form.reset()
       loadClientData()
-      setCurrentTransaction(transaction)
-      setShowReceipt(true)
+      
+      // Générer et télécharger le reçu PDF
+      try {
+        await generateAndDownloadTransactionPDF(transaction, client)
+      } catch (pdfError) {
+        console.error("Erreur lors de la génération du reçu:", pdfError)
+        toast.error("Erreur lors de la génération du reçu")
+      }
       
       if (onTransactionSuccess) {
         onTransactionSuccess()
@@ -210,8 +230,14 @@ export function TransactionsClientDialog({
       toast.success("Paiement de dette effectué avec succès")
       form.reset()
       loadClientData()
-      setCurrentTransaction(transaction)
-      setShowReceipt(true)
+      
+      // Générer et télécharger le reçu PDF
+      try {
+        await generateAndDownloadTransactionPDF(transaction, client)
+      } catch (pdfError) {
+        console.error("Erreur lors de la génération du reçu:", pdfError)
+        toast.error("Erreur lors de la génération du reçu")
+      }
       
       if (onTransactionSuccess) {
         onTransactionSuccess()
@@ -222,6 +248,16 @@ export function TransactionsClientDialog({
       toast.error("Erreur lors du paiement de la dette")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+  
+  // Fonction pour afficher le reçu d'une transaction existante
+  const handleViewReceipt = async (transaction: Transaction) => {
+    try {
+      await generateAndDownloadTransactionPDF(transaction, client)
+    } catch (error) {
+      console.error("Erreur lors de la génération du reçu:", error)
+      toast.error("Erreur lors de la génération du reçu")
     }
   }
   
@@ -244,10 +280,10 @@ export function TransactionsClientDialog({
   }
   
   // Fonction pour formatter un montant
-  const formatAmount = (amount?: number) => {
-    return typeof amount === 'number' 
-      ? amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' FCFA'
-      : '0.00 FCFA'
+  const formatAmount = (amount?: number | string) => {
+    if (amount === undefined || amount === null) return '0.00 FCFA'
+    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+    return numericAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' FCFA'
   }
   
   // Fonction pour formater une date
@@ -284,205 +320,188 @@ export function TransactionsClientDialog({
   }
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        {showReceipt && currentTransaction ? (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5" />
-                Reçu de transaction
-              </DialogTitle>
-              <DialogDescription>
-                Reçu de transaction pour {client.prenom} {client.nom}
-              </DialogDescription>
-            </DialogHeader>
-            <TransactionReceipt 
-              transaction={currentTransaction} 
-              client={client} 
-              onClose={() => setShowReceipt(false)} 
-            />
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Wallet className="h-5 w-5" />
-                Transactions financières
-              </DialogTitle>
-              <DialogDescription>
-                Gérez les transactions financières pour {client.prenom} {client.nom}
-              </DialogDescription>
-            </DialogHeader>
-            
-            {/* Résumé des comptes */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Card className={balances.dette > 0 ? "border-destructive/50" : ""}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-destructive" />
-                    Dette client
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-bold">
-                    {formatAmount(balances.dette)}
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-primary" />
-                    Dépôt disponible
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-bold">
-                    {formatAmount(balances.depot)}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <Separator />
-            
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <Tabs 
-              value={activeTab} 
-              className="w-full"
-              onValueChange={(value) => {
-                setActiveTab(value)
-                form.reset()
-                setError(null)
-              }}
-            >
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="depot">Dépôt</TabsTrigger>
-                <TabsTrigger value="retrait">Retrait</TabsTrigger>
-                <TabsTrigger value="imputer_dette">Ajouter dette</TabsTrigger>
-                <TabsTrigger value="payer_dette">Payer dette</TabsTrigger>
-              </TabsList>
-              
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-                  {/* Contenu commun à tous les onglets */}
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="montant"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Montant*</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              min="0" 
-                              step="0.01" 
-                              placeholder="Entrez le montant" 
-                              {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {activeTab === "retrait" && "Montant à retirer du dépôt du client"}
-                            {activeTab === "depot" && "Montant à ajouter au dépôt du client"}
-                            {activeTab === "imputer_dette" && "Montant de dette à ajouter"}
-                            {activeTab === "payer_dette" && "Montant de dette à payer"}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="commentaire"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Commentaire</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Optionnel: ajoutez un commentaire à cette transaction"
-                              className="resize-none"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Ajoutez un commentaire pour décrire la raison de cette transaction
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  {/* Descriptions spécifiques à chaque onglet */}
-                  <TabsContent value="depot">
-                    <p className="text-sm text-muted-foreground">
-                      Le dépôt permet d'ajouter de l'argent au compte du client. Ce montant pourra être utilisé pour de futures commandes.
-                    </p>
-                  </TabsContent>
-                  
-                  <TabsContent value="retrait">
-                    <p className="text-sm text-muted-foreground">
-                      Le retrait permet de diminuer le montant disponible sur le compte du client. Le solde doit être suffisant.
-                    </p>
-                  </TabsContent>
-                  
-                  <TabsContent value="imputer_dette">
-                    <p className="text-sm text-muted-foreground">
-                      L'imputation de dette permet d'ajouter un montant à la dette du client. Utilisez cette option quand le client doit de l'argent.
-                    </p>
-                  </TabsContent>
-                  
-                  <TabsContent value="payer_dette">
-                    <p className="text-sm text-muted-foreground">
-                      Le paiement de dette permet de réduire la dette du client. Le montant maximum est la dette actuelle.
-                    </p>
-                  </TabsContent>
-                  
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                      Annuler
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Traitement...
-                        </>
-                      ) : (
-                        <>
-                          {activeTab === "depot" && "Ajouter le dépôt"}
-                          {activeTab === "retrait" && "Effectuer le retrait"}
-                          {activeTab === "imputer_dette" && "Imputer la dette"}
-                          {activeTab === "payer_dette" && "Payer la dette"}
-                        </>
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </Tabs>
-            
-            {/* Transactions récentes */}
-            <div className="mt-4">
-              <h3 className="text-sm font-medium mb-2">Transactions récentes</h3>
-              
-              {loading ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  <p>Chargement des transactions...</p>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5" />
+              Transactions financières
+            </DialogTitle>
+            <DialogDescription>
+              Gérez les transactions financières pour {client.prenom} {client.nom}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Résumé des comptes */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Card className={balances.dette > 0 ? "border-destructive/50" : ""}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  Dette client
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">
+                  {formatAmount(balances.dette)}
                 </div>
-              ) : transactions.length > 0 ? (
-                <div className="max-h-[200px] overflow-auto border rounded-md">
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  Dépôt disponible
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">
+                  {formatAmount(balances.depot)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <Separator />
+          
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <Tabs 
+            value={activeTab} 
+            className="w-full"
+            onValueChange={(value) => {
+              setActiveTab(value)
+              form.reset()
+              setError(null)
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+              <TabsTrigger value="depot">Dépôt</TabsTrigger>
+              <TabsTrigger value="retrait">Retrait</TabsTrigger>
+              <TabsTrigger value="imputer_dette">Dette</TabsTrigger>
+              <TabsTrigger value="payer_dette">Payer</TabsTrigger>
+            </TabsList>
+            
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+                {/* Contenu commun à tous les onglets */}
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="montant"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Montant*</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            placeholder="Entrez le montant" 
+                            {...field}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          {activeTab === "retrait" && "Montant à retirer du dépôt du client"}
+                          {activeTab === "depot" && "Montant à ajouter au dépôt du client"}
+                          {activeTab === "imputer_dette" && "Montant de dette à ajouter"}
+                          {activeTab === "payer_dette" && "Montant de dette à payer"}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="commentaire"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Commentaire</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Optionnel: ajoutez un commentaire à cette transaction"
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Ajoutez un commentaire pour décrire la raison de cette transaction
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                {/* Descriptions spécifiques à chaque onglet */}
+                <TabsContent value="depot">
+                  <p className="text-xs text-muted-foreground">
+                    Le dépôt permet d'ajouter de l'argent au compte du client. Ce montant pourra être utilisé pour de futures commandes.
+                  </p>
+                </TabsContent>
+                
+                <TabsContent value="retrait">
+                  <p className="text-xs text-muted-foreground">
+                    Le retrait permet de diminuer le montant disponible sur le compte du client. Le solde doit être suffisant.
+                  </p>
+                </TabsContent>
+                
+                <TabsContent value="imputer_dette">
+                  <p className="text-xs text-muted-foreground">
+                    L'imputation de dette permet d'ajouter un montant à la dette du client. Utilisez cette option quand le client doit de l'argent.
+                  </p>
+                </TabsContent>
+                
+                <TabsContent value="payer_dette">
+                  <p className="text-xs text-muted-foreground">
+                    Le paiement de dette permet de réduire la dette du client. Le montant maximum est la dette actuelle.
+                  </p>
+                </TabsContent>
+                
+                <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Traitement...
+                      </>
+                    ) : (
+                      <>
+                        {activeTab === "depot" && "Ajouter le dépôt"}
+                        {activeTab === "retrait" && "Effectuer le retrait"}
+                        {activeTab === "imputer_dette" && "Imputer la dette"}
+                        {activeTab === "payer_dette" && "Payer la dette"}
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </Tabs>
+          
+          {/* Transactions récentes */}
+          <div className="mt-4">
+            <h3 className="text-sm font-medium mb-2">Transactions récentes</h3>
+            
+            {loading ? (
+              <div className="flex items-center justify-center h-32 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <p>Chargement des transactions...</p>
+              </div>
+            ) : transactions.length > 0 ? (
+              <div className="max-h-[200px] overflow-auto border rounded-md">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -496,19 +515,16 @@ export function TransactionsClientDialog({
                         <TableRow 
                           key={transaction.transaction_id}
                           className="cursor-pointer"
-                          onClick={() => {
-                            setCurrentTransaction(transaction)
-                            setShowReceipt(true)
-                          }}
+                          onClick={() => handleViewReceipt(transaction)}
                         >
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium whitespace-nowrap">
                             {formatDate(transaction.date_transaction)}
                           </TableCell>
-                          <TableCell className="flex items-center gap-2">
+                          <TableCell className="flex items-center gap-2 whitespace-nowrap">
                             {getTransactionIcon(transaction.type_transaction)}
                             {getTransactionLabel(transaction.type_transaction)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right whitespace-nowrap">
                             {formatAmount(transaction.montant)}
                           </TableCell>
                         </TableRow>
@@ -516,15 +532,15 @@ export function TransactionsClientDialog({
                     </TableBody>
                   </Table>
                 </div>
-              ) : (
-                <div className="flex items-center justify-center h-16 text-muted-foreground border rounded-md">
-                  <p>Aucune transaction trouvée</p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-16 text-muted-foreground border rounded-md">
+                <p>Aucune transaction trouvée</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 } 
